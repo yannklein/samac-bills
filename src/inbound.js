@@ -66,6 +66,15 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
       if (failedRole === 'yann' || !people().yann) return { outbox: [], action: 'ignored' };
       return { outbox: toYann(`No se pudo entregar un WhatsApp a ${failedRole ?? msg.recipient}: ${msg.error ?? 'error desconocido'}`), action: 'failure_notice' };
     }
+    if (role && role !== 'yann' && msg.type === 'text' && /borrar mis datos/i.test(msg.text ?? '')) {
+      return {
+        outbox: [
+          wa.text(from, 'Recibido. Yann borrará tus datos en un plazo de 30 días.'),
+          ...toYann(`${people()[role]?.name ?? role} pide borrar sus datos (política de privacidad).`, role),
+        ],
+        action: 'deletion_request',
+      };
+    }
     if (!role || role === 'adriana' || role === 'marcela') return { outbox: [], action: 'ignored' };
 
     // Meter photo (from the neighbor, or forwarded by Yann)

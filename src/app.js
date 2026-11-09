@@ -45,7 +45,7 @@ export function configFromEnv(env = process.env) {
     n8nSendWebhookUrl: env.N8N_SEND_WEBHOOK_URL || '',
     n8nWebhookToken: env.N8N_WEBHOOK_TOKEN || '',
     waPhoneNumberId: env.WA_PHONE_NUMBER_ID || '',
-    graphVersion: env.GRAPH_API_VERSION || 'v23.0',
+    graphVersion: env.GRAPH_API_VERSION || 'v27.0',
     devUserEmail: prod ? '' : env.DEV_USER_EMAIL || '',
   };
 }
@@ -72,6 +72,8 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
   app.use('/api', express.json({ limit: '25mb' }));
   app.use(express.json({ limit: '1mb' }));
   app.get('/healthz', (req, res) => res.json({ ok: true }));
+  // Public page required by Meta to publish the WhatsApp app (Cloudflare Access bypass on /privacy)
+  app.get('/privacy', (req, res) => res.render('privacy', { contact: config.adminEmail }));
 
   // ---------- API for n8n (Bearer token, internal network) ----------
   const api = express.Router();

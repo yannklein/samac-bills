@@ -1,7 +1,7 @@
 // Builders for WhatsApp Cloud API (Graph) message payloads.
 // The app returns an "outbox" of { url, body } items; n8n POSTs each one with the bearer token.
 
-export function makeWhatsApp({ phoneNumberId, graphVersion = 'v23.0', lang = 'es' }) {
+export function makeWhatsApp({ phoneNumberId, graphVersion = 'v27.0', lang = 'es' }) {
   const url = `https://graph.facebook.com/${graphVersion}/${phoneNumberId || 'WA_PHONE_NUMBER_ID'}/messages`;
   const wrap = (to, payload) => ({ url, body: { messaging_product: 'whatsapp', recipient_type: 'individual', to: String(to), ...payload } });
 

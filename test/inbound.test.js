@@ -42,7 +42,7 @@ test('photo -> buttons -> Sí -> split to all 4, stale tap rejected', () => {
   const btns = out.outbox[0].body.interactive.action.buttons;
   assert.equal(btns[0].reply.id, `ok|${bill.id}|12445`);
   assert.match(textOf(out.outbox[0]), /Anterior: 12345 → consumo 100 kWh/);
-  assert.equal(out.outbox[0].url, 'https://graph.facebook.com/v23.0/123/messages');
+  assert.equal(out.outbox[0].url, 'https://graph.facebook.com/v27.0/123/messages');
 
   out = inbound.handleWhatsApp({ from: P.neighbor, type: 'button', button_id: btns[0].reply.id });
   assert.equal(out.mark_sent_bill_id, bill.id);
@@ -92,6 +92,11 @@ test('photo without open bill, other people ignored, help/estado for Yann', () =
   assert.match(textOf(inbound.handleWhatsApp({ from: P.yann, type: 'text', text: 'hola' }).outbox[0]), /Comandos/);
   newBill();
   assert.match(textOf(inbound.handleWhatsApp({ from: P.yann, type: 'text', text: 'estado' }).outbox[0]), /awaiting_reading/);
+});
+
+test('data deletion request is acknowledged and forwarded to Yann', () => {
+  const out = inbound.handleWhatsApp({ from: P.marcela, type: 'text', text: 'Hola, borrar mis datos por favor' });
+  assert.deepEqual(types(out), [`${P.marcela}:text`, `${P.yann}:template:samac_aviso`]);
 });
 
 test('delivery failures notify Yann, but never about Yann himself', () => {

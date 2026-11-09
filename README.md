@@ -6,7 +6,7 @@ Marcela (1/3) and Yann & Adriana (2/3). Everyone pays Yann (the bill is debited 
 ```
 Endesa email ──► n8n (IMAP) ──► app: download PDF (NIE) + parse ──► WhatsApp template to neighbor
 neighbor photo ──► n8n (WhatsApp Trigger + Claude reads meter) ──► app ──► "Leo 12445 kWh, ¿correcto?" [Sí] [No]
-[Sí] ──► app computes split ──► WhatsApp template to all 4 ──► bills.yannklein.dev (breakdown + evidence)
+[Sí] ──► app computes split ──► WhatsApp template to all 4 ──► samac-bills.yannklein.dev (breakdown + evidence)
 ```
 
 - **App** (this repo): Node 24 + Express + SQLite. Source of truth for bills, readings, evidence (PDF + meter
@@ -70,13 +70,13 @@ when they're absent. `test/fixtures/` only holds the sanitized detail lines.
       **Spanish (es)**) with sample values. Wait for approval.
    5. Each of the 4 people sends "hola" to the test number once and saves the contact.
 2. **App on Coolify**: new resource from this repo (Dockerfile), persistent volume on `/data`, env from
-   `.env.example`, domain `bills.yannklein.dev`. Then seed people (names, WhatsApp numbers with country code,
+   `.env.example`, domain `samac-bills.yannklein.dev`. Then seed people (names, WhatsApp numbers with country code,
    emails) and the last known neighbor reading:
    `docker exec -i <container> node scripts/seed.js /dev/stdin < people.json`
-3. **Cloudflare**: tunnel public hostname `bills.yannklein.dev` → the app. Zero Trust → Access → Applications:
-   - `bills.yannklein.dev` — policy *Allow* emails of the 4 people (one-time PIN). Copy the **AUD** tag into
+3. **Cloudflare**: tunnel public hostname `samac-bills.yannklein.dev` → the app. Zero Trust → Access → Applications:
+   - `samac-bills.yannklein.dev` — policy *Allow* emails of the 4 people (one-time PIN). Copy the **AUD** tag into
      `CF_ACCESS_AUD`.
-   - `bills.yannklein.dev/api` — policy *Bypass* Everyone (the API has its own bearer token).
+   - `samac-bills.yannklein.dev/api` — policy *Bypass* Everyone (the API has its own bearer token).
    - Check WAF / Bot Fight Mode doesn't challenge `n8n.yannklein.dev/webhook/*` (Meta must reach it).
 4. **iCloud**: appleid.apple.com → app-specific password for n8n.
 5. **n8n credentials** (then open each workflow and select them):
@@ -103,5 +103,5 @@ when they're absent. `test/fixtures/` only holds the sanitized detail lines.
 
 - Before activating, replay the bill download once by hand to confirm Endesa needs no cookies (this stores
   the bill in the app; the email workflow will then treat that email as a duplicate):
-  `curl -s -X POST -H "Authorization: Bearer $API_TOKEN" -H 'Content-Type: application/json' -d '{"link":"<DESCARGAR FACTURA href from a fresh email>"}' https://bills.yannklein.dev/api/endesa/fetch`
+  `curl -s -X POST -H "Authorization: Bearer $API_TOKEN" -H 'Content-Type: application/json' -d '{"link":"<DESCARGAR FACTURA href from a fresh email>"}' https://samac-bills.yannklein.dev/api/endesa/fetch`
 - While testing, put **Yann's number as the neighbor** in `people.json`, re-seed, and play the neighbor.

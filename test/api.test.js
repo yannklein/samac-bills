@@ -51,6 +51,12 @@ const api = (p, opts = {}) => fetch(base + '/api' + p, {
   headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', ...(opts.headers ?? {}) },
 });
 
+test('privacy page is public', async () => {
+  const r = await fetch(base + '/privacy?as=stranger@example.com');
+  assert.equal(r.status, 200);
+  assert.match(await r.text(), /Borrado de datos/);
+});
+
 test('api requires the bearer token', async () => {
   const r = await fetch(base + '/api/people');
   assert.equal(r.status, 401);
