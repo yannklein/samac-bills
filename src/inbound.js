@@ -9,8 +9,8 @@ import { parseEndesaBill } from './parseEndesaBill.js';
 import { pdfText } from './pdf.js';
 import { formatEur } from './money.js';
 
-const esDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
-const HELP = 'Comandos: "lectura 12345" (lectura del contador del vecino), "kwh 100" (kWh del vecino directamente), "estado".';
+const fmtDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
+const HELP = 'Commands: "reading 12345" (neighbor meter reading), "kwh 100" (neighbor kWh directly), "status".';
 
 export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }) {
   const people = () => svc.people();
@@ -31,8 +31,8 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
     const d = svc.billDetail(billId);
     const s = d.split;
     return s
-      ? `${d.bill.invoice_no}: vecino ${s.neighbor_kwh} kWh → ${formatEur(s.neighbor_cents)}, Marcela ${formatEur(s.marcela_cents)}, Yann y Adriana ${formatEur(s.yann_adriana_cents)}.`
-      : `${d.bill.invoice_no}: sin reparto todavía.`;
+      ? `${d.bill.invoice_no}: neighbor ${s.neighbor_kwh} kWh → ${formatEur(s.neighbor_cents)}, Marcela ${formatEur(s.marcela_cents)}, Yann & Adriana ${formatEur(s.yann_adriana_cents)}.`
+      : `${d.bill.invoice_no}: no split yet.`;
   }
 
   /** Confirm a reading and build the outbox, turning business errors into replies. */
@@ -45,14 +45,14 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
       if (role === 'yann') return { outbox: [wa.text(from, `${e.message} ${HELP}`)], action: 'rejected' };
       return {
         outbox: [
-          wa.text(from, 'Gracias, Yann revisará la lectura antes de enviar el reparto.'),
-          ...toYann(`Revisa la factura ${bill.invoice_no}: ${e.message} Responde "lectura N" o "kwh N" para forzar. ${publicUrl}/bills/${bill.id}`, role),
+          wa.text(from, 'Thanks! Yann will check the reading before sending the split.'),
+          ...toYann(`Check bill ${bill.invoice_no}: ${e.message} Reply "reading N" or "kwh N" to force it. ${publicUrl}/bills/${bill.id}`, role),
         ],
         action: 'needs_review',
       };
     }
     const outbox = splitOutbox(bill.id);
-    if (role === 'yann' && opts.source === 'override') outbox.unshift(wa.text(from, `Recalculado. ${summary(bill.id)} Enviando a todos.`));
+    if (role === 'yann' && opts.source === 'override') outbox.unshift(wa.text(from, `Recalculated. ${summary(bill.id)} Sending to everyone.`));
     return { outbox, mark_sent_bill_id: bill.id, action: 'split_sent' };
   }
 
@@ -64,13 +64,13 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
       const failedRole = svc.roleByPhone(msg.recipient);
       // Never notify Yann about a failed notification to Yann (would loop).
       if (failedRole === 'yann' || !people().yann) return { outbox: [], action: 'ignored' };
-      return { outbox: toYann(`No se pudo entregar un WhatsApp a ${failedRole ?? msg.recipient}: ${msg.error ?? 'error desconocido'}`), action: 'failure_notice' };
+      return { outbox: toYann(`A WhatsApp message to ${failedRole ?? msg.recipient} could not be delivered: ${msg.error ?? 'unknown error'}`), action: 'failure_notice' };
     }
-    if (role && role !== 'yann' && msg.type === 'text' && /borrar mis datos/i.test(msg.text ?? '')) {
+    if (role && role !== 'yann' && msg.type === 'text' && /(delete my data|borrar mis datos)/i.test(msg.text ?? '')) {
       return {
         outbox: [
-          wa.text(from, 'Recibido. Yann borrará tus datos en un plazo de 30 días.'),
-          ...toYann(`${people()[role]?.name ?? role} pide borrar sus datos (política de privacidad).`, role),
+          wa.text(from, 'Received. Yann will delete your data within 30 days.'),
+          ...toYann(`${people()[role]?.name ?? role} asked to delete their data (privacy policy).`, role),
         ],
         action: 'deletion_request',
       };
@@ -81,11 +81,11 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
     if (msg.type === 'image') {
       const bill = svc.openBill();
       if (!bill) {
-        if (role === 'yann') return { outbox: [wa.text(from, 'No hay ninguna factura esperando lectura.')], action: 'no_open_bill' };
+        if (role === 'yann') return { outbox: [wa.text(from, 'No bill is waiting for a reading.')], action: 'no_open_bill' };
         return {
           outbox: [
-            wa.text(from, 'Gracias. Aún no ha llegado la factura de luz; te aviso cuando llegue.'),
-            ...toYann('El vecino ha enviado una foto del contador pero no hay factura pendiente.', role),
+            wa.text(from, 'Thanks! The electricity bill has not arrived yet; I will let you know when it does.'),
+            ...toYann('The neighbor sent a meter photo but no bill is pending.', role),
           ],
           action: 'no_open_bill',
         };
@@ -95,18 +95,18 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
         reading, photoBuffer: msg.photoBuffer, photoExt: msg.photoExt, confidence: msg.confidence, source: 'vision',
       });
       if (reading == null) {
-        return { outbox: [wa.text(from, 'No he podido leer el contador en la foto. ¿Me escribes la lectura? (solo el número, p. ej. 12345)')], action: 'unreadable' };
+        return { outbox: [wa.text(from, 'I could not read the meter in the photo. Could you type the reading? (just the number, e.g. 12345)')], action: 'unreadable' };
       }
       const lines = [
-        `Factura de luz ${esDate(bill.period_from)} – ${esDate(bill.period_to)}.`,
-        `Leo en el contador: ${reading} kWh.`,
-        cand.previous_reading != null ? `Anterior: ${cand.previous_reading} → consumo ${cand.neighbor_kwh} kWh.` : null,
-        ...cand.warnings.filter((w) => !/No se pudo leer/.test(w)).map((w) => `⚠ ${w}`),
-        '¿Es correcto?',
+        `Electricity bill ${fmtDate(bill.period_from)} – ${fmtDate(bill.period_to)}.`,
+        `I read on the meter: ${reading} kWh.`,
+        cand.previous_reading != null ? `Previous: ${cand.previous_reading} → consumption ${cand.neighbor_kwh} kWh.` : null,
+        ...cand.warnings.filter((w) => !/Could not read/.test(w)).map((w) => `⚠ ${w}`),
+        'Is this correct?',
       ].filter(Boolean);
       return {
         outbox: [wa.buttons(from, lines.join('\n'), [
-          { id: `ok|${bill.id}|${reading}`, title: 'Sí, correcto' },
+          { id: `ok|${bill.id}|${reading}`, title: 'Yes, correct' },
           { id: `no|${bill.id}`, title: 'No' },
         ])],
         action: 'candidate',
@@ -118,7 +118,7 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
       const bill = billId ? (() => { try { return svc.getBill(Number(billId)); } catch { return null; } })() : null;
       if (!bill) return { outbox: [], action: 'ignored' };
       if (kind === 'no') {
-        return { outbox: [wa.text(from, 'Vale. Escríbeme la lectura del contador (solo el número, p. ej. 12345).')], action: 'asked_typed' };
+        return { outbox: [wa.text(from, 'OK. Please type the meter reading (just the number, e.g. 12345).')], action: 'asked_typed' };
       }
       if (kind === 'ok') {
         return confirmAndSend(bill, { reading: Number(reading), expectReading: Number(reading), source: 'vision' }, { from, role });
@@ -129,19 +129,19 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
     if (msg.type === 'text') {
       const text = String(msg.text ?? '').trim();
       if (role === 'yann') {
-        const cmd = text.match(/^(lectura|kwh)\s+(-?[\d.,]+)/i);
+        const cmd = text.match(/^(reading|lectura|kwh)\s+(-?[\d.,]+)/i);
         if (cmd) {
           const bill = svc.openBill() ?? svc.latestBill();
-          if (!bill) return { outbox: [wa.text(from, 'No hay facturas.')], action: 'no_bill' };
+          if (!bill) return { outbox: [wa.text(from, 'No bills yet.')], action: 'no_bill' };
           const n = parseReading(cmd[2]);
           const opts = cmd[1].toLowerCase() === 'kwh'
             ? { neighborKwh: n, source: 'override' }
             : { reading: n, source: 'override' };
           return confirmAndSend(bill, opts, { from, role });
         }
-        if (/^estado/i.test(text)) {
+        if (/^(status|estado)/i.test(text)) {
           const bill = svc.openBill() ?? svc.latestBill();
-          const status = bill ? `${bill.invoice_no} (${esDate(bill.period_from)} – ${esDate(bill.period_to)}): ${bill.status}. ${summary(bill.id)}` : 'No hay facturas.';
+          const status = bill ? `${bill.invoice_no} (${fmtDate(bill.period_from)} – ${fmtDate(bill.period_to)}): ${bill.status}. ${summary(bill.id)}` : 'No bills yet.';
           return { outbox: [wa.text(from, `${status} ${publicUrl}`)], action: 'status' };
         }
         return { outbox: [wa.text(from, HELP)], action: 'help' };
@@ -150,7 +150,7 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
       const n = parseReading(text);
       if (n == null) return { outbox: [], action: 'ignored' };
       const bill = svc.openBill();
-      if (!bill) return { outbox: [wa.text(from, 'Gracias. No hay ninguna factura pendiente ahora mismo.')], action: 'no_open_bill' };
+      if (!bill) return { outbox: [wa.text(from, 'Thanks! There is no pending bill right now.')], action: 'no_open_bill' };
       return confirmAndSend(bill, { reading: n, source: 'typed' }, { from, role });
     }
 
@@ -161,25 +161,25 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
   async function handleEndesaEmail({ html }) {
     if (!/factura de luz/i.test(html ?? '')) return { outbox: [], action: 'ignored_not_luz' };
     const link = extractDownloadLink(html);
-    if (!link) return { outbox: toYann(`Email de Endesa sin enlace de descarga. Crea la factura a mano: ${publicUrl}/bills/new`), action: 'no_link' };
+    if (!link) return { outbox: toYann(`Endesa email without a download link. Create the bill by hand: ${publicUrl}/bills/new`), action: 'no_link' };
     try {
       const pdf = await downloadBillPdf(link, endesaNie, { fetchImpl });
       const parsed = parseEndesaBill(await pdfText(pdf));
       if (parsed.errors.length) {
-        const pdfPath = svc.saveFile(pdf, 'pdf', 'factura-error');
-        throw new HttpError(422, `${parsed.errors.join(' ')} (PDF guardado: ${pdfPath})`);
+        const pdfPath = svc.saveFile(pdf, 'pdf', 'bill-error');
+        throw new HttpError(422, `${parsed.errors.join(' ')} (PDF saved: ${pdfPath})`);
       }
       const { bill, superseded } = svc.createBill({ parsed, pdfBuffer: pdf, source: 'auto' });
       const m = svc.message(bill.id);
       const outbox = [];
       if (m.neighbor?.wa_phone) outbox.push(wa.template(m.neighbor.wa_phone, TEMPLATES.requestReading, m.request_vars));
-      const extra = superseded.length ? ` La factura ${superseded.map((b) => b.invoice_no).join(', ')} quedó sin lectura y se ha sustituido.` : '';
-      outbox.push(...toYann(`Nueva factura de luz ${bill.invoice_no} (${formatEur(bill.total_cents)}), pedida la foto al vecino.${extra} ${m.url}`));
+      const extra = superseded.length ? ` Bill ${superseded.map((b) => b.invoice_no).join(', ')} never got a reading and was replaced.` : '';
+      outbox.push(...toYann(`New electricity bill ${bill.invoice_no} (${formatEur(bill.total_cents)}), asked the neighbor for the meter photo.${extra} ${m.url}`));
       return { outbox, bill_id: bill.id, action: 'bill_created' };
     } catch (e) {
       if (e instanceof HttpError && e.status === 409) return { outbox: [], action: 'duplicate' };
       if (!(e instanceof HttpError || e instanceof EndesaError)) console.error(e);
-      return { outbox: toYann(`No pude procesar la factura de Endesa: ${e.message} Créala a mano: ${publicUrl}/bills/new`), action: 'error' };
+      return { outbox: toYann(`Could not process the Endesa bill: ${e.message} Create it by hand: ${publicUrl}/bills/new`), action: 'error' };
     }
   }
 

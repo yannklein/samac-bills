@@ -14,8 +14,8 @@ export class HttpError extends Error {
 }
 
 const OPEN = ['awaiting_reading', 'awaiting_confirmation'];
-const esDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
-const esKwh = (n) => (n == null ? '' : String(Math.round(n * 1000) / 1000).replace('.', ','));
+const fmtDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
+const fmtKwh = (n) => (n == null ? '' : String(Math.round(n * 1000) / 1000));
 
 export function makeService({ db, dataDir, publicUrl = '' }) {
   const filesDir = path.join(dataDir, 'files');
@@ -30,7 +30,7 @@ export function makeService({ db, dataDir, publicUrl = '' }) {
 
   const getBill = (id) => {
     const b = db.prepare('SELECT * FROM bills WHERE id = ?').get(id);
-    if (!b) throw new HttpError(404, `Factura ${id} no encontrada.`);
+    if (!b) throw new HttpError(404, `Bill ${id} not found.`);
     return { ...b, items: JSON.parse(b.items_json) };
   };
 
@@ -53,26 +53,26 @@ export function makeService({ db, dataDir, publicUrl = '' }) {
 
   function createBill({ parsed, items, pdfBuffer, pdfPath, source }) {
     const finalItems = items ?? parsed.items;
-    if (!parsed.invoiceNo) throw new HttpError(422, 'Falta el número de factura.');
-    if (!parsed.totalCents || !parsed.kwhTotal) throw new HttpError(422, 'Faltan el total o los kWh.');
+    if (!parsed.invoiceNo) throw new HttpError(422, 'Missing invoice number.');
+    if (!parsed.totalCents || !parsed.kwhTotal) throw new HttpError(422, 'Missing total or kWh.');
     const unknown = finalItems.filter((i) => !['fixed', 'variable', 'tax'].includes(i.kind));
     if (unknown.length) {
-      throw new HttpError(422, `Líneas sin clasificar: ${unknown.map((i) => i.label).join(', ')}`);
+      throw new HttpError(422, `Unclassified lines: ${unknown.map((i) => i.label).join(', ')}`);
     }
     const sum = finalItems.reduce((s, i) => s + i.amountCents, 0);
     if (Math.abs(sum - parsed.totalCents) > 1) {
-      throw new HttpError(422, `Las líneas (${formatEurPlain(sum)} €) no suman el total (${formatEurPlain(parsed.totalCents)} €).`);
+      throw new HttpError(422, `Lines (€${formatEurPlain(sum)}) don't add up to the total (€${formatEurPlain(parsed.totalCents)}).`);
     }
     if (db.prepare('SELECT 1 FROM bills WHERE invoice_no = ?').get(parsed.invoiceNo)) {
-      throw new HttpError(409, `La factura ${parsed.invoiceNo} ya existe.`);
+      throw new HttpError(409, `Bill ${parsed.invoiceNo} already exists.`);
     }
-    const storedPdf = pdfPath ?? (pdfBuffer ? saveFile(pdfBuffer, 'pdf', `factura-${parsed.invoiceNo}`) : null);
+    const storedPdf = pdfPath ?? (pdfBuffer ? saveFile(pdfBuffer, 'pdf', `bill-${parsed.invoiceNo}`) : null);
 
     let superseded = [];
     const id = db.transaction(() => {
       superseded = db.prepare(`SELECT id, invoice_no FROM bills WHERE status IN ('awaiting_reading','awaiting_confirmation')`).all();
       db.prepare(`UPDATE bills SET status = 'superseded', status_note = ? WHERE status IN ('awaiting_reading','awaiting_confirmation')`)
-        .run(`Sustituida por ${parsed.invoiceNo}`);
+        .run(`Replaced by ${parsed.invoiceNo}`);
       return db.prepare(`
         INSERT INTO bills (invoice_no, period_from, period_to, days, issued_at, total_cents, kwh_total, items_json, pdf_path, source, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'awaiting_reading')`)
@@ -99,9 +99,9 @@ export function makeService({ db, dataDir, publicUrl = '' }) {
 
   function addCandidate(billId, { reading, photoBuffer, photoExt = 'jpg', confidence, source = 'vision', force = false }) {
     const bill = getBill(billId);
-    if (!force && !OPEN.includes(bill.status)) throw new HttpError(409, `La factura ${bill.invoice_no} no está esperando lectura (estado: ${bill.status}).`);
-    if (reading != null && !Number.isFinite(reading)) throw new HttpError(422, 'Lectura no válida.');
-    const photo = photoBuffer ? saveFile(photoBuffer, photoExt, `contador-${bill.invoice_no}`) : null;
+    if (!force && !OPEN.includes(bill.status)) throw new HttpError(409, `Bill ${bill.invoice_no} is not waiting for a reading (status: ${bill.status}).`);
+    if (reading != null && !Number.isFinite(reading)) throw new HttpError(422, 'Invalid reading.');
+    const photo = photoBuffer ? saveFile(photoBuffer, photoExt, `meter-${bill.invoice_no}`) : null;
     db.transaction(() => {
       db.prepare(`INSERT INTO readings (bill_id, reading_kwh, photo_path, source, status, confidence) VALUES (?, ?, ?, ?, 'candidate', ?)`)
         .run(bill.id, reading, photo, source, confidence ?? null);
@@ -110,10 +110,10 @@ export function makeService({ db, dataDir, publicUrl = '' }) {
     const prev = previousReading(bill);
     const delta = prev && reading != null ? Math.round((reading - prev.reading_kwh) * 1000) / 1000 : null;
     const warnings = [];
-    if (delta != null && delta < 0) warnings.push(`La lectura (${reading}) es menor que la anterior (${prev.reading_kwh}).`);
-    if (delta != null && delta > bill.kwh_total) warnings.push(`El vecino consumiría ${delta} kWh, más que el total de la factura (${bill.kwh_total} kWh).`);
-    if (!prev) warnings.push('No hay lectura anterior: Yann debe indicar los kWh del vecino ("kwh 100").');
-    if (reading == null) warnings.push('No se pudo leer el contador en la foto.');
+    if (delta != null && delta < 0) warnings.push(`The reading (${reading}) is lower than the previous one (${prev.reading_kwh}).`);
+    if (delta != null && delta > bill.kwh_total) warnings.push(`The neighbor would have used ${delta} kWh, more than the whole bill (${bill.kwh_total} kWh).`);
+    if (!prev) warnings.push('No previous reading: Yann must give the neighbor kWh ("kwh 100").');
+    if (reading == null) warnings.push('Could not read the meter in the photo.');
     return { bill_id: bill.id, invoice_no: bill.invoice_no, reading, previous_reading: prev?.reading_kwh ?? null, neighbor_kwh: delta, warnings };
   }
 
@@ -128,20 +128,20 @@ export function makeService({ db, dataDir, publicUrl = '' }) {
     const lastCandidate = db.prepare(`SELECT * FROM readings WHERE bill_id = ? AND status = 'candidate' ORDER BY id DESC LIMIT 1`).get(bill.id);
     if (expectReading != null) {
       if (bill.status !== 'awaiting_confirmation' || !lastCandidate || lastCandidate.reading_kwh !== Number(expectReading)) {
-        throw new HttpError(409, 'Este botón ya no es válido (hay una lectura más reciente o ya se confirmó).');
+        throw new HttpError(409, 'This button is no longer valid (there is a newer reading or it was already confirmed).');
       }
     }
-    if (bill.status === 'superseded' && !isOverride) throw new HttpError(409, 'Factura sustituida por otra más reciente.');
+    if (bill.status === 'superseded' && !isOverride) throw new HttpError(409, 'This bill was replaced by a newer one.');
     if (!isOverride && !OPEN.includes(bill.status)) {
-      throw new HttpError(409, `La factura ${bill.invoice_no} ya está calculada (estado: ${bill.status}).`);
+      throw new HttpError(409, `Bill ${bill.invoice_no} is already calculated (status: ${bill.status}).`);
     }
 
     const prev = previousReading(bill);
     let finalReading = reading != null ? Number(reading) : null;
     let kwh = neighborKwh != null ? Number(neighborKwh) : null;
     if (kwh == null) {
-      if (finalReading == null) throw new HttpError(422, 'Indica la lectura o los kWh del vecino.');
-      if (!prev) throw new HttpError(422, 'No hay lectura anterior: indica los kWh del vecino directamente.');
+      if (finalReading == null) throw new HttpError(422, 'Give the reading or the neighbor kWh.');
+      if (!prev) throw new HttpError(422, 'No previous reading: give the neighbor kWh directly.');
       kwh = Math.round((finalReading - prev.reading_kwh) * 1000) / 1000;
     } else if (finalReading == null && prev) {
       finalReading = Math.round((prev.reading_kwh + kwh) * 1000) / 1000;
@@ -183,7 +183,7 @@ export function makeService({ db, dataDir, publicUrl = '' }) {
   function markSent(billId) {
     const bill = getBill(billId);
     const r = db.prepare(`UPDATE splits SET sent_at = datetime('now') WHERE bill_id = ?`).run(bill.id);
-    if (!r.changes) throw new HttpError(409, 'La factura aún no tiene reparto calculado.');
+    if (!r.changes) throw new HttpError(409, 'This bill has no split yet.');
     db.prepare(`UPDATE bills SET status = 'sent' WHERE id = ?`).run(bill.id);
     return { ok: true };
   }
@@ -204,11 +204,11 @@ export function makeService({ db, dataDir, publicUrl = '' }) {
       neighbor: ppl.neighbor ? { name: ppl.neighbor.name, wa_phone: ppl.neighbor.wa_phone } : null,
       yann: ppl.yann ? { name: ppl.yann.name, wa_phone: ppl.yann.wa_phone } : null,
       recipients,
-      request_vars: [ppl.neighbor?.name ?? 'vecino', esDate(bill.period_from), esDate(bill.period_to)],
+      request_vars: [ppl.neighbor?.name ?? 'neighbor', fmtDate(bill.period_from), fmtDate(bill.period_to)],
       split_vars: split
         ? [
-            bill.invoice_no, esDate(bill.period_from), esDate(bill.period_to), formatEurPlain(bill.total_cents),
-            esKwh(split.neighbor_kwh), formatEurPlain(split.neighbor_cents), formatEurPlain(split.marcela_cents),
+            bill.invoice_no, fmtDate(bill.period_from), fmtDate(bill.period_to), formatEurPlain(bill.total_cents),
+            fmtKwh(split.neighbor_kwh), formatEurPlain(split.neighbor_cents), formatEurPlain(split.marcela_cents),
             formatEurPlain(split.yann_adriana_cents), `${publicUrl}/bills/${bill.id}`,
           ]
         : null,
@@ -238,7 +238,7 @@ export function makeService({ db, dataDir, publicUrl = '' }) {
 
   function togglePaid(billId, payer) {
     const split = db.prepare('SELECT * FROM splits WHERE bill_id = ?').get(billId);
-    if (!split) throw new HttpError(409, 'Sin reparto calculado.');
+    if (!split) throw new HttpError(409, 'No split yet.');
     const exists = db.prepare('SELECT 1 FROM payments WHERE bill_id = ? AND payer = ?').get(billId, payer);
     if (exists) db.prepare('DELETE FROM payments WHERE bill_id = ? AND payer = ?').run(billId, payer);
     else {

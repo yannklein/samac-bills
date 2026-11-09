@@ -41,27 +41,27 @@ test('photo -> buttons -> Sí -> split to all 4, stale tap rejected', () => {
   assert.deepEqual(types(out), [`${P.neighbor}:interactive`]);
   const btns = out.outbox[0].body.interactive.action.buttons;
   assert.equal(btns[0].reply.id, `ok|${bill.id}|12445`);
-  assert.match(textOf(out.outbox[0]), /Anterior: 12345 → consumo 100 kWh/);
+  assert.match(textOf(out.outbox[0]), /Previous: 12345 → consumption 100 kWh/);
   assert.equal(out.outbox[0].url, 'https://graph.facebook.com/v27.0/123/messages');
 
   out = inbound.handleWhatsApp({ from: P.neighbor, type: 'button', button_id: btns[0].reply.id });
   assert.equal(out.mark_sent_bill_id, bill.id);
-  assert.deepEqual(types(out).sort(), Object.values(P).map((p) => `${p}:template:samac_luz_reparto`).sort());
-  assert.match(textOf(out.outbox[0]), /32,28 \| 12,73 \| 25,47/);
+  assert.deepEqual(types(out).sort(), Object.values(P).map((p) => `${p}:template:samac_split`).sort());
+  assert.match(textOf(out.outbox[0]), /32\.28 \| 12\.73 \| 25\.47/);
   // Photo is kept as evidence on the confirmed reading
   assert.ok(svc.billDetail(bill.id).readings.find((r) => r.status === 'confirmed').photo_path);
 
   out = inbound.handleWhatsApp({ from: P.neighbor, type: 'button', button_id: btns[0].reply.id });
   assert.deepEqual(types(out), [`${P.neighbor}:text`]);
-  assert.match(textOf(out.outbox[0]), /ya no es válido/);
+  assert.match(textOf(out.outbox[0]), /no longer valid/);
 });
 
 test('unreadable photo -> neighbor types the number -> split', () => {
   const bill = newBill();
   let out = inbound.handleWhatsApp({ from: P.neighbor, type: 'image', reading: null, photoBuffer: Buffer.from('jpg') });
-  assert.match(textOf(out.outbox[0]), /No he podido leer/);
+  assert.match(textOf(out.outbox[0]), /could not read/i);
   out = inbound.handleWhatsApp({ from: P.neighbor, type: 'button', button_id: `no|${bill.id}` });
-  assert.match(textOf(out.outbox[0]), /Escríbeme la lectura/);
+  assert.match(textOf(out.outbox[0]), /type the meter reading/);
   out = inbound.handleWhatsApp({ from: P.neighbor, type: 'text', text: '12.445' });
   assert.equal(out.action, 'split_sent');
   const r = svc.billDetail(bill.id).readings.find((x) => x.status === 'confirmed');
@@ -73,40 +73,40 @@ test('implausible reading -> neighbor thanked, Yann asked to review, then Yann o
   const bill = newBill();
   let out = inbound.handleWhatsApp({ from: P.neighbor, type: 'text', text: '13000' });
   assert.equal(out.action, 'needs_review');
-  assert.deepEqual(types(out), [`${P.neighbor}:text`, `${P.yann}:template:samac_aviso`]);
+  assert.deepEqual(types(out), [`${P.neighbor}:text`, `${P.yann}:template:samac_notice`]);
   assert.equal(svc.getBill(bill.id).status, 'awaiting_reading');
 
   out = inbound.handleWhatsApp({ from: P.yann, type: 'text', text: 'kwh 50' });
   assert.equal(out.action, 'split_sent');
   assert.equal(types(out)[0], `${P.yann}:text`);
-  assert.match(textOf(out.outbox[0]), /Recalculado/);
+  assert.match(textOf(out.outbox[0]), /Recalculated/);
   assert.equal(out.outbox.length, 5);
   assert.equal(svc.billDetail(bill.id).split.neighbor_kwh, 50);
 });
 
 test('photo without open bill, other people ignored, help/estado for Yann', () => {
   let out = inbound.handleWhatsApp({ from: P.neighbor, type: 'image', reading: 1 });
-  assert.deepEqual(types(out), [`${P.neighbor}:text`, `${P.yann}:template:samac_aviso`]);
+  assert.deepEqual(types(out), [`${P.neighbor}:text`, `${P.yann}:template:samac_notice`]);
   assert.equal(inbound.handleWhatsApp({ from: P.marcela, type: 'text', text: '123' }).outbox.length, 0);
   assert.equal(inbound.handleWhatsApp({ from: '34999999999', type: 'image', reading: 1 }).outbox.length, 0);
-  assert.match(textOf(inbound.handleWhatsApp({ from: P.yann, type: 'text', text: 'hola' }).outbox[0]), /Comandos/);
+  assert.match(textOf(inbound.handleWhatsApp({ from: P.yann, type: 'text', text: 'hola' }).outbox[0]), /Commands/);
   newBill();
-  assert.match(textOf(inbound.handleWhatsApp({ from: P.yann, type: 'text', text: 'estado' }).outbox[0]), /awaiting_reading/);
+  assert.match(textOf(inbound.handleWhatsApp({ from: P.yann, type: 'text', text: 'status' }).outbox[0]), /awaiting_reading/);
 });
 
 test('data deletion request is acknowledged and forwarded to Yann', () => {
-  const out = inbound.handleWhatsApp({ from: P.marcela, type: 'text', text: 'Hola, borrar mis datos por favor' });
-  assert.deepEqual(types(out), [`${P.marcela}:text`, `${P.yann}:template:samac_aviso`]);
+  const out = inbound.handleWhatsApp({ from: P.marcela, type: 'text', text: 'Hi, please delete my data' });
+  assert.deepEqual(types(out), [`${P.marcela}:text`, `${P.yann}:template:samac_notice`]);
 });
 
 test('delivery failures notify Yann, but never about Yann himself', () => {
-  assert.deepEqual(types(inbound.handleWhatsApp({ type: 'status_failed', recipient: P.marcela, error: 'x' })), [`${P.yann}:template:samac_aviso`]);
+  assert.deepEqual(types(inbound.handleWhatsApp({ type: 'status_failed', recipient: P.marcela, error: 'x' })), [`${P.yann}:template:samac_notice`]);
   assert.equal(inbound.handleWhatsApp({ type: 'status_failed', recipient: P.yann, error: 'x' }).outbox.length, 0);
 });
 
 test('template variables never contain newlines', () => {
   const wa = makeWhatsApp({ phoneNumberId: '1' });
-  const m = wa.template('1', 'samac_aviso', ['a\nb    c']);
+  const m = wa.template('1', 'samac_notice', ['a\nb    c']);
   assert.equal(m.body.template.components[0].parameters[0].text, 'a b   c');
 });
 
@@ -116,7 +116,7 @@ test('endesa email -> bill + template to neighbor + notice to Yann; duplicates a
     const html = raw.slice(raw.indexOf('<'));
     let out = await inbound.handleEndesaEmail({ html });
     assert.equal(out.action, 'bill_created', JSON.stringify(out));
-    assert.deepEqual(types(out), [`${P.neighbor}:template:samac_luz_pedir_lectura`, `${P.yann}:template:samac_aviso`]);
+    assert.deepEqual(types(out), [`${P.neighbor}:template:samac_request_reading`, `${P.yann}:template:samac_notice`]);
     assert.equal(textOf(out.outbox[0]), 'Pepe | 07/10/2026 | 01/11/2026');
     out = await inbound.handleEndesaEmail({ html });
     assert.equal(out.action, 'duplicate');
@@ -132,5 +132,5 @@ test('endesa email with NIE rejected -> notice to Yann with manual link', async 
   });
   const out = await bad.handleEndesaEmail({ html: 'factura de luz <a href="https://click.digital.endesaclientes.com/?qs=1">DESCARGAR FACTURA</a>' });
   assert.equal(out.action, 'error');
-  assert.match(textOf(out.outbox[0]), /rechazó el documento.*bills\/new/);
+  assert.match(textOf(out.outbox[0]), /rejected the document.*bills\/new/);
 });

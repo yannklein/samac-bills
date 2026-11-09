@@ -1,14 +1,14 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><%= typeof title !== 'undefined' ? title + ' · ' : '' %>Samac · Facturas</title>
+  <title><%= typeof title !== 'undefined' ? title + ' · ' : '' %>Samac · Bills</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header class="top">
-  <a href="/" class="brand">⚡ Samac · Facturas de luz</a>
+  <a href="/" class="brand">⚡ Samac · Electricity bills</a>
   <span class="who"><%= user.email %><%= user.isAdmin ? ' · admin' : '' %></span>
 </header>
 <main>

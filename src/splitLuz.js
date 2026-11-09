@@ -22,17 +22,17 @@ function apportion(lines, target) {
 }
 
 export function splitLuz(items, { kwhTotal, neighborKwh, totalCents }) {
-  if (!(kwhTotal > 0)) throw new Error('El consumo total (kWh) debe ser mayor que 0.');
-  if (!Number.isFinite(neighborKwh)) throw new Error('Falta el consumo del vecino (kWh).');
-  if (neighborKwh < 0) throw new Error(`Consumo del vecino negativo (${neighborKwh} kWh): revisa la lectura.`);
+  if (!(kwhTotal > 0)) throw new Error('Total consumption (kWh) must be greater than 0.');
+  if (!Number.isFinite(neighborKwh)) throw new Error('Missing the neighbor consumption (kWh).');
+  if (neighborKwh < 0) throw new Error(`Negative neighbor consumption (${neighborKwh} kWh): check the reading.`);
   const unknown = items.filter((i) => !['fixed', 'variable', 'tax'].includes(i.kind));
   if (unknown.length) {
-    throw new Error(`Hay líneas sin clasificar: ${unknown.map((i) => i.label).join(', ')}`);
+    throw new Error(`Some lines are unclassified: ${unknown.map((i) => i.label).join(', ')}`);
   }
 
   const warnings = [];
   if (neighborKwh > kwhTotal) {
-    warnings.push(`El vecino (${neighborKwh} kWh) supera el consumo total de la factura (${kwhTotal} kWh).`);
+    warnings.push(`The neighbor (${neighborKwh} kWh) exceeds the bill's total consumption (${kwhTotal} kWh).`);
   }
 
   const share = neighborKwh / kwhTotal;

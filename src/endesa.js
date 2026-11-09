@@ -33,17 +33,17 @@ function cookieHeader(res, jar) {
 }
 
 export async function downloadBillPdf(link, nie, { fetchImpl = fetch } = {}) {
-  if (!nie) throw new EndesaError('ENDESA_NIE no está configurado.');
+  if (!nie) throw new EndesaError('ENDESA_NIE is not configured.');
   if (!/^https:\/\/[\w.-]*endesaclientes\.com\//.test(link)) {
-    throw new EndesaError('El enlace no es de endesaclientes.com.');
+    throw new EndesaError('The link is not an endesaclientes.com link.');
   }
   const jar = new Map();
 
   const page = await fetchImpl(link, { headers: { 'User-Agent': UA }, redirect: 'follow' });
-  if (!page.ok) throw new EndesaError(`La página de descarga respondió ${page.status} (¿enlace caducado?).`);
+  if (!page.ok) throw new EndesaError(`The download page answered ${page.status} (expired link?).`);
   const html = await page.text();
   const tokens = extractTokens(html);
-  if (!tokens) throw new EndesaError('No se encontraron los tokens en la página de descarga (¿enlace caducado o página cambiada?).');
+  if (!tokens) throw new EndesaError('Tokens not found on the download page (expired link or page changed?).');
 
   const body = 'data=' + encodeURIComponent(JSON.stringify({ Documento: nie, ...tokens }));
   const res = await fetchImpl(VALIDATE_URL, {
@@ -59,13 +59,13 @@ export async function downloadBillPdf(link, nie, { fetchImpl = fetch } = {}) {
   });
   const pdfUrl = (await res.text()).trim();
   if (!res.ok || !pdfUrl.startsWith('https://')) {
-    throw new EndesaError(`Endesa rechazó el documento (NIE incorrecto o enlace caducado): ${pdfUrl.slice(0, 120)}`);
+    throw new EndesaError(`Endesa rejected the document (wrong NIE or expired link): ${pdfUrl.slice(0, 120)}`);
   }
 
   const pdf = await fetchImpl(pdfUrl, { headers: { 'User-Agent': UA, Referer: page.url, Cookie: cookieHeader(res, jar) } });
   const buf = Buffer.from(await pdf.arrayBuffer());
   if (!pdf.ok || buf.subarray(0, 5).toString() !== '%PDF-') {
-    throw new EndesaError(`La descarga no devolvió un PDF (HTTP ${pdf.status}).`);
+    throw new EndesaError(`The download did not return a PDF (HTTP ${pdf.status}).`);
   }
   return buf;
 }

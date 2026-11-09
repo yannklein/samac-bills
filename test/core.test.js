@@ -1,20 +1,28 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, access } from 'node:fs/promises';
-import { parseEsAmount, formatEur } from '../src/money.js';
+import { parseEsAmount, formatEur, parseDecimal, parseAmount } from '../src/money.js';
 import { parseEndesaBill } from '../src/parseEndesaBill.js';
 import { splitLuz } from '../src/splitLuz.js';
 import { parseReading } from '../src/parseReading.js';
 
 const sample = await readFile(new URL('./fixtures/endesa_oct_2026_detalle.txt', import.meta.url), 'utf8');
 
-test('money: Spanish amounts to cents and back', () => {
+test('money: Spanish bill amounts, form input in either style, English display', () => {
   assert.equal(parseEsAmount('70,48'), 7048);
   assert.equal(parseEsAmount('-1,01'), -101);
   assert.equal(parseEsAmount('1.234,56'), 123456);
-  assert.equal(formatEur(3228), '32,28 €');
-  assert.equal(formatEur(-101), '-1,01 €');
-  assert.equal(formatEur(123456), '1.234,56 €');
+  assert.equal(parseAmount('10.72'), 1072);
+  assert.equal(parseAmount('10,72'), 1072);
+  assert.equal(parseAmount('1,234.56'), 123456);
+  assert.equal(parseAmount('1.234,56'), 123456);
+  assert.equal(parseAmount('-1.01'), -101);
+  assert.equal(parseDecimal('233.251'), 233.251);
+  assert.equal(parseDecimal('233,251'), 233.251);
+  assert.ok(Number.isNaN(parseDecimal('abc')));
+  assert.equal(formatEur(3228), '€32.28');
+  assert.equal(formatEur(-101), '-€1.01');
+  assert.equal(formatEur(123456), '€1,234.56');
 });
 
 test('parseEndesaBill: October 2026 bill', () => {
@@ -54,8 +62,8 @@ test('parseEndesaBill: unknown line and sum mismatch are reported', () => {
   const unknown = bill.items.find((i) => i.kind === 'unknown');
   assert.ok(unknown, 'unknown line kept as item');
   assert.equal(unknown.amountCents, 500);
-  assert.ok(bill.errors.some((e) => /desconocida/i.test(e)));
-  assert.ok(bill.errors.some((e) => /no suman/i.test(e)));
+  assert.ok(bill.errors.some((e) => /unknown line/i.test(e)));
+  assert.ok(bill.errors.some((e) => /add up/i.test(e)));
 });
 
 test('parseEndesaBill: not an Endesa bill', () => {
@@ -112,14 +120,14 @@ test('splitLuz: edge cases', () => {
   assert.equal(all.neighborCents + all.homeCents, 7048);
   assert.ok(all.neighborCents > all.homeCents);
 
-  assert.throws(() => splitLuz(bill.items, { ...opts, neighborKwh: -1 }), /negativ/i);
+  assert.throws(() => splitLuz(bill.items, { ...opts, neighborKwh: -1 }), /negative/i);
 
   const over = splitLuz(bill.items, { ...opts, neighborKwh: 300 });
   assert.ok(over.warnings.length > 0);
 
   assert.throws(
     () => splitLuz([...bill.items, { key: 'x', label: 'x', kind: 'unknown', amountCents: 5 }], { ...opts, neighborKwh: 1 }),
-    /sin clasificar/i,
+    /unclassified/i,
   );
 });
 
@@ -131,6 +139,9 @@ test('parseReading: typed meter readings', () => {
   assert.equal(parseReading(' lectura 12345 kWh '), 12345);
   assert.equal(parseReading('12345.6'), 12345.6);
   assert.equal(parseReading('-5'), -5);
+  assert.equal(parseReading('12,345'), 12345);
+  assert.equal(parseReading('1,234.5'), 1234.5);
+  assert.equal(parseReading('reading 12445'), 12445);
   assert.equal(parseReading('hola'), null);
   assert.equal(parseReading(''), null);
 });

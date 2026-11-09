@@ -18,10 +18,10 @@ const RULES = [
 ];
 
 export const KIND_LABELS = {
-  fixed: 'Fijo (50/50)',
-  variable: 'Variable (por kWh)',
-  tax: 'Impuesto (por ratio)',
-  unknown: 'Sin clasificar',
+  fixed: 'Fixed (50/50)',
+  variable: 'Variable (by kWh)',
+  tax: 'Tax (by ratio)',
+  unknown: 'Unclassified',
 };
 
 const toIso = (dmy) => {
@@ -51,7 +51,7 @@ export function parseEndesaBill(text) {
   const end = lines.findIndex((l, i) => i > start && /^TOTAL\s+-?[\d.]+,\d{2}\s*€/.test(l));
   const items = [];
   if (start === -1 || end === -1) {
-    errors.push('No se encontró la sección "DETALLE DE LA FACTURA" / TOTAL. ¿Es una factura de luz de Endesa?');
+    errors.push('Could not find the "DETALLE DE LA FACTURA" / TOTAL section. Is this an Endesa electricity bill?');
   } else {
     for (const line of lines.slice(start + 1, end)) {
       // Category headers look like "Potencia 21,44 €......" -> skip
@@ -67,7 +67,7 @@ export function parseEndesaBill(text) {
         const kwh = label.match(/([\d.]+,\d+)\s*kWh/i);
         item.kwh = kwh ? parseEsNumber(kwh[1]) : null;
       }
-      if (!rule) errors.push(`Línea desconocida, clasifícala a mano: "${label}" (${formatEur(amountCents)})`);
+      if (!rule) errors.push(`Unknown line, classify it by hand: "${label}" (${formatEur(amountCents)})`);
       items.push(item);
     }
   }
@@ -79,14 +79,14 @@ export function parseEndesaBill(text) {
     : consumoTotal ? parseEsNumber(consumoTotal[1]) : null;
 
   const totalCents = totalM ? parseEsAmount(totalM[1]) : null;
-  if (!invoiceNo) errors.push('No se encontró el número de factura.');
-  if (!period) errors.push('No se encontró el periodo de facturación.');
-  if (totalCents == null) errors.push('No se encontró el TOTAL.');
-  if (!kwhTotal) errors.push('No se encontró el consumo total en kWh.');
+  if (!invoiceNo) errors.push('Invoice number not found.');
+  if (!period) errors.push('Billing period not found.');
+  if (totalCents == null) errors.push('TOTAL not found.');
+  if (!kwhTotal) errors.push('Total consumption (kWh) not found.');
   if (totalCents != null && items.length) {
     const sum = items.reduce((s, i) => s + i.amountCents, 0);
     if (Math.abs(sum - totalCents) > 1) {
-      errors.push(`Las líneas no suman el total: ${formatEur(sum)} ≠ ${formatEur(totalCents)}.`);
+      errors.push(`Lines don't add up to the total: ${formatEur(sum)} ≠ ${formatEur(totalCents)}.`);
     }
   }
 

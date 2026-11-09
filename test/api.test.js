@@ -54,7 +54,7 @@ const api = (p, opts = {}) => fetch(base + '/api' + p, {
 test('privacy page is public', async () => {
   const r = await fetch(base + '/privacy?as=stranger@example.com');
   assert.equal(r.status, 200);
-  assert.match(await r.text(), /Borrado de datos/);
+  assert.match(await r.text(), /Data deletion/);
 });
 
 test('api requires the bearer token', async () => {
@@ -89,7 +89,7 @@ test('full flow: bill -> candidate -> confirm -> sent, with stale-button protect
   const msg = await r.json();
   assert.equal(r.status, 200, JSON.stringify(msg));
   assert.deepEqual(msg.split_vars, [
-    'P26CON046489044', '07/10/2026', '01/11/2026', '70,48', '100', '32,28', '12,73', '25,47', `https://bills.example/bills/${bill.id}`,
+    'P26CON046489044', '07/10/2026', '01/11/2026', '70.48', '100', '32.28', '12.73', '25.47', `https://bills.example/bills/${bill.id}`,
   ]);
   assert.equal(msg.recipients.length, 4);
 
@@ -157,7 +157,7 @@ test('web: viewers can see, only admin can edit, strangers are blocked', async (
   assert.equal(post.status, 403);
   assert.equal((await fetch(`${base}/?as=stranger@example.com`)).status, 403);
   const page = await (await fetch(`${base}/bills/1`)).text();
-  assert.match(page, /Desglose|Lecturas/);
+  assert.match(page, /Breakdown|meter readings/);
 });
 
 test('endesa: token extraction', () => {
@@ -178,7 +178,7 @@ test('api: /endesa/fetch end to end with mocked Endesa (local only)', { skip: !e
   const body = await r.json();
   assert.equal(r.status, 201, JSON.stringify(body));
   assert.equal(body.invoice_no, 'P26CON046489044');
-  assert.equal(body.total, '70,48 €');
+  assert.equal(body.total, '€70.48');
   assert.ok(ctx.svc.getBill(body.bill_id).pdf_path);
   r = await api('/endesa/fetch', { method: 'POST', body: JSON.stringify({ link: 'https://click.digital.endesaclientes.com/?qs=abc' }) });
   assert.equal(r.status, 409);

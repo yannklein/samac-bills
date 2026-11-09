@@ -1,23 +1,23 @@
-<%- include('partials/head', { title: 'Pagos' }) %>
+<%- include('partials/head', { title: 'Payments' }) %>
 <div class="row between">
-  <h1>Pagos</h1>
-  <% if (user.isAdmin) { %><a class="button" href="/bills/new">+ Nueva factura manual</a><% } %>
+  <h1>Payments</h1>
+  <% if (user.isAdmin) { %><a class="button" href="/bills/new">+ New bill (manual)</a><% } %>
 </div>
 <% if (!bills.length) { %>
-  <p class="muted">Aún no hay facturas.</p>
+  <p class="muted">No bills yet.</p>
 <% } else { %>
 <div class="table-wrap">
 <table class="list">
   <thead>
-    <tr><th>Periodo</th><th class="num">Total</th><th class="num">Vecino</th><th class="num">Marcela</th><th class="num">Yann y Adriana</th><th>Estado</th></tr>
+    <tr><th>Period</th><th class="num">Total</th><th class="num">Neighbor</th><th class="num">Marcela</th><th class="num">Yann &amp; Adriana</th><th>Status</th></tr>
   </thead>
   <tbody>
   <% for (const b of bills) { const paid = (b.paid_by || '').split(','); %>
     <tr class="clickable <%= b.status === 'superseded' ? 'dim' : '' %>" onclick="location.href='/bills/<%= b.id %>'">
-      <td><a href="/bills/<%= b.id %>"><%= esDate(b.period_from) %> – <%= esDate(b.period_to) %></a><br><small class="muted"><%= b.invoice_no %><%= b.source === 'manual' ? ' · manual' : '' %></small></td>
+      <td><a href="/bills/<%= b.id %>"><%= fmtDate(b.period_from) %> – <%= fmtDate(b.period_to) %></a><br><small class="muted"><%= b.invoice_no %><%= b.source === 'manual' ? ' · manual' : '' %></small></td>
       <td class="num"><%= formatEur(b.total_cents) %></td>
-      <td class="num"><%= b.neighbor_cents != null ? formatEur(b.neighbor_cents) : '—' %><% if (paid.includes('neighbor')) { %> <span class="paid" title="Pagado">✓</span><% } %><br><small class="muted"><%= b.neighbor_kwh != null ? esKwh(b.neighbor_kwh) : '' %></small></td>
-      <td class="num"><%= b.marcela_cents != null ? formatEur(b.marcela_cents) : '—' %><% if (paid.includes('marcela')) { %> <span class="paid" title="Pagado">✓</span><% } %></td>
+      <td class="num"><%= b.neighbor_cents != null ? formatEur(b.neighbor_cents) : '—' %><% if (paid.includes('neighbor')) { %> <span class="paid" title="Paid">✓</span><% } %><br><small class="muted"><%= b.neighbor_kwh != null ? fmtKwh(b.neighbor_kwh) : '' %></small></td>
+      <td class="num"><%= b.marcela_cents != null ? formatEur(b.marcela_cents) : '—' %><% if (paid.includes('marcela')) { %> <span class="paid" title="Paid">✓</span><% } %></td>
       <td class="num"><%= b.yann_adriana_cents != null ? formatEur(b.yann_adriana_cents) : '—' %></td>
       <td><span class="badge s-<%= b.status %>"><%= STATUS_LABELS[b.status] %></span></td>
     </tr>

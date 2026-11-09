@@ -5,8 +5,8 @@ Marcela (1/3) and Yann & Adriana (2/3). Everyone pays Yann (the bill is debited 
 
 ```
 Endesa email ──► n8n (IMAP) ──► app: download PDF (NIE) + parse ──► WhatsApp template to neighbor
-neighbor photo ──► n8n (WhatsApp Trigger + Claude reads meter) ──► app ──► "Leo 12445 kWh, ¿correcto?" [Sí] [No]
-[Sí] ──► app computes split ──► WhatsApp template to all 4 ──► samac-bills.yannklein.dev (breakdown + evidence)
+neighbor photo ──► n8n (WhatsApp Trigger + Claude reads meter) ──► app ──► "I read 12445 kWh, correct?" [Yes] [No]
+[Yes] ──► app computes split ──► WhatsApp template to all 4 ──► samac-bills.yannklein.dev (breakdown + evidence)
 ```
 
 - **App** (this repo): Node 24 + Express + SQLite. Source of truth for bills, readings, evidence (PDF + meter
@@ -19,14 +19,14 @@ neighbor photo ──► n8n (WhatsApp Trigger + Claude reads meter) ──► a
 
 | Bill line | Split |
 |---|---|
-| Potencia, Bono social, Alquiler contador | 50/50 |
-| Energía, Descuento | by kWh: neighbor kWh = this meter reading − previous reading |
-| Impuesto electricidad, IVA | by the ratio of each side's pre-tax subtotal |
+| Power (Potencia), social bonus financing (Bono social), meter rental (Alquiler contador) | 50/50 |
+| Energy (Energía), discount (Descuento) | by kWh: neighbor kWh = this meter reading − previous reading |
+| Electricity tax (Impuesto electricidad), VAT (IVA) | by the ratio of each side's pre-tax subtotal |
 
 Neighbor total is rounded to the cent; **home = invoice total − neighbor**, so it always reconciles.
 Marcela = home / 3, Yann & Adriana = the rest. Every column of the breakdown adds up exactly.
 
-Example (Oct 2026, 70,48 €, neighbor 100 of 233,251 kWh): neighbor 32,28 € · Marcela 12,73 € · Yann & Adriana 25,47 €.
+Example (Oct 2026, €70.48, neighbor 100 of 233.251 kWh): neighbor €32.28 · Marcela €12.73 · Yann & Adriana €25.47.
 
 Unknown bill lines (a new service, a rectified bill) or line items not adding up to the total stop the
 automation and notify Yann; create it by hand at `/bills/new` (upload PDF → fix/classify lines → reading → save).
@@ -35,13 +35,14 @@ automation and notify Yann; create it by hand at `/bills/new` (upload PDF → fi
 
 | Who | Sends | Reply |
 |---|---|---|
-| Neighbor | photo (or photo as document) | "Leo N kWh … ¿Es correcto?" [Sí] [No] |
-| Neighbor | [Sí] | split template to all 4 |
-| Neighbor | [No] / unreadable photo | "Escríbeme la lectura" → typed number → split |
-| Neighbor | implausible reading | "Yann revisará" + notice to Yann |
-| Yann | `lectura 12345` / `kwh 100` | override (any state, also after sending) → split to all 4 |
-| Yann | `estado` | status of the latest bill |
+| Neighbor | photo (or photo as document) | "I read on the meter: N kWh … Is this correct?" [Yes, correct] [No] |
+| Neighbor | [Yes, correct] | split template to all 4 |
+| Neighbor | [No] / unreadable photo | "Please type the meter reading" → typed number → split |
+| Neighbor | implausible reading | "Yann will check the reading" + notice to Yann |
+| Yann | `reading 12345` / `kwh 100` | override (any state, also after sending) → split to all 4 |
+| Yann | `status` | status of the latest bill |
 | Yann | forwarded meter photo | same as the neighbor's photo, buttons go to Yann |
+| Anyone | `delete my data` | acknowledgement + notice to Yann (privacy policy promise) |
 
 Stale or double button taps are rejected. Delivery failures notify Yann (except failures to Yann himself).
 
@@ -90,14 +91,18 @@ when they're absent. `test/fixtures/` only holds the sanitized detail lines.
 
 ### Templates
 
-`samac_luz_pedir_lectura`
-> Hola {{1}}, ha llegado la factura de luz del {{2}} al {{3}}. ¿Me envías una foto de tu contador de luz por aquí? ¡Gracias!
+Create them in WhatsApp Manager → Message templates: category **Utility**, language **English** (code `en`,
+not "English (US)"; or set `WA_TEMPLATE_LANG` to the code you picked), variable type **Number**,
+no header/footer/buttons. Names must match exactly.
 
-`samac_luz_reparto`
-> Factura de luz {{1}}, del {{2}} al {{3}}, total {{4}} €. El vecino consumió {{5}} kWh y paga {{6}} € a Yann. Marcela paga {{7}} € a Yann (1/3 de casa). Yann y Adriana pagan {{8}} € (2/3 de casa). Detalle y justificantes en {{9}} . Gracias.
+`samac_request_reading` (samples: Pepe · 07/10/2026 · 01/11/2026)
+> Hi {{1}}, the electricity bill for {{2}} to {{3}} has arrived. Could you send me a photo of your electricity meter here? Thanks!
 
-`samac_aviso`
-> Aviso de Samac bills: {{1}}. Revisa la app si hace falta.
+`samac_split` (samples: P26CON046489044 · 07/10/2026 · 01/11/2026 · 70.48 · 100 · 32.28 · 12.73 · 25.47 · https://samac-bills.yannklein.dev/bills/1)
+> Electricity bill {{1}}, from {{2}} to {{3}}, total €{{4}}. The neighbor used {{5}} kWh and pays €{{6}} to Yann. Marcela pays €{{7}} to Yann (1/3 of home). Yann and Adriana pay €{{8}} (2/3 of home). Breakdown and evidence: {{9}} . Thanks!
+
+`samac_notice` (sample: New electricity bill received)
+> Samac bills notice: {{1}}. Check the app if needed.
 
 ## First live run checklist
 

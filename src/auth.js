@@ -14,31 +14,31 @@ export function makeAuth(config) {
     if (devUserEmail) return { email: String(req.query.as || req.get('x-dev-user') || devUserEmail).toLowerCase() };
     const token = req.get('cf-access-jwt-assertion');
     if (!token) {
-      return { reason: 'La petición no pasó por Cloudflare Access (no hay token). Revisa que exista una aplicación de Access para este dominio sin path, con política Allow.' };
+      return { reason: 'The request did not go through Cloudflare Access (no token). Check there is an Access application for this hostname with an empty path and an Allow policy.' };
     }
     if (!jwks || !cfAud) {
-      return { reason: 'Faltan CF_ACCESS_TEAM_DOMAIN o CF_ACCESS_AUD en la configuración de la app.' };
+      return { reason: 'CF_ACCESS_TEAM_DOMAIN or CF_ACCESS_AUD is missing in the app configuration.' };
     }
     try {
       const { payload } = await jwtVerify(token, jwks, { issuer: `https://${cfTeamDomain}`, audience: cfAud });
-      if (!payload.email) return { reason: 'El token de Cloudflare Access no contiene email.' };
+      if (!payload.email) return { reason: 'The Cloudflare Access token has no email.' };
       return { email: String(payload.email).toLowerCase() };
     } catch (e) {
       console.warn(`[auth] Cloudflare Access token rejected: ${e.code ?? ''} ${e.message}`);
-      return { reason: `Token de Cloudflare Access no válido (${e.code ?? e.message}). Revisa CF_ACCESS_TEAM_DOMAIN y que CF_ACCESS_AUD sea el AUD de la aplicación principal.` };
+      return { reason: `Invalid Cloudflare Access token (${e.code ?? e.message}). Check CF_ACCESS_TEAM_DOMAIN, and that CF_ACCESS_AUD is the AUD of the main application.` };
     }
   }
 
   const viewer = async (req, res, next) => {
     const { email, reason } = await identify(req);
-    if (!email) return res.status(403).send(`Acceso denegado: ${reason}`);
+    if (!email) return res.status(403).send(`Access denied: ${reason}`);
     req.user = { email, isAdmin: email === adminEmail.toLowerCase() };
     res.locals.user = req.user;
     next();
   };
 
   const admin = (req, res, next) => {
-    if (!req.user?.isAdmin) return res.status(403).send('Solo Yann puede hacer esto.');
+    if (!req.user?.isAdmin) return res.status(403).send('Only Yann can do this.');
     next();
   };
 
