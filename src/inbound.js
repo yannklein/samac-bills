@@ -191,6 +191,10 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
     } catch (e) {
       if (e instanceof HttpError && e.status === 409) return { outbox: [], action: 'duplicate' };
       if (!(e instanceof HttpError || e instanceof EndesaError)) console.error(e);
+      if (e.debugHtml) {
+        const debugPath = svc.saveFile(Buffer.from(e.debugHtml), 'html', 'endesa-debug');
+        e.message += ` Page saved: ${publicUrl}/files/${debugPath}`;
+      }
       return { outbox: toYann(`Could not process the Endesa bill: ${e.message} Create it by hand: ${publicUrl}/bills/new`), action: 'error', error: e.message, ...noYannWarning() };
     }
   }

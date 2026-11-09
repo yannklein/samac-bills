@@ -69,3 +69,44 @@ test('pdfCandidates finds iframe, JS redirect and .pdf links', () => {
   const c = pdfCandidates(`<iframe src="/a?x=1&amp;y=2"></iframe><script>window.location.href = "https://e.com/b";</script><a href="/c/file.pdf">x</a>`, 'https://e.com/v');
   assert.deepEqual(c, ['https://e.com/a?x=1&y=2', 'https://e.com/b', 'https://e.com/c/file.pdf']);
 });
+
+test('loader page (descargarFacturaAD): rebuilds the JS-built servlet URL and keeps the session cookie', async () => {
+  const loader = 'https://www.endesaclientes.com/descargarFacturaAD.html?x=1';
+  const page = html(`Datos erróneos, no se ha podido descargar la factura. Cargando ...
+    <script>
+      var jsonDownloadPdf = '';
+      var billNumber='P26CON046489044';
+      var holderCompanyCode='0021';
+      var aux = "null";
+      var billUrl = '';
+      if (billNumber.length>0 && holderCompanyCode>0) {
+        billUrl = '/sites/Satellite/DownloadDocumentServlet?pagename=SiteEntry_IB_ES/Bill_Search/View_Pdf&jsonDownloadPdf='+'{"billNumber":"P26CON046489044"}'+'&AD=Y'+'&emissionDate='+emissionDate;
+      }
+      window.location.href=$(this).attr("href");
+    </script>`, 'DescargarFacturaAD');
+  let servletCookie = null;
+  const fetchImpl = async (url, opts = {}) => {
+    if (url === LINK) return new Response('var encDocumento = "D"; var encFactura = "F";');
+    if (url.endsWith('/ajax-validacion-doc-aviso')) return new Response(loader);
+    if (url === loader) {
+      const r = new Response(page, { headers: { 'content-type': 'text/html', 'set-cookie': 'JSESSIONID=abc; Path=/' } });
+      Object.defineProperty(r, 'url', { value: loader });
+      return r;
+    }
+    if (url.startsWith('https://www.endesaclientes.com/sites/Satellite/DownloadDocumentServlet?')) {
+      servletCookie = opts.headers?.Cookie;
+      assert.match(url, /jsonDownloadPdf=\{%22billNumber%22:%22P26CON046489044%22\}&AD=Y&emissionDate=\d{8}$/);
+      return new Response(PDF, { headers: { 'content-type': 'application/pdf' } });
+    }
+    return new Response(html('nope'), { headers: { 'content-type': 'text/html' } });
+  };
+  assert.deepEqual(await downloadBillPdf(LINK, 'Z0000000T', { fetchImpl }), PDF);
+  assert.match(servletCookie, /JSESSIONID=abc/);
+});
+
+test('emission date logic mirrors the page', async () => {
+  const { emissionDateFrom } = await import('../src/endesa.js');
+  assert.equal(emissionDateFrom("x'eml-20261106rest"), '20261106');
+  assert.equal(emissionDateFrom('retosmds:AAAAAAAA20261106'), '20261106');
+  assert.match(emissionDateFrom('null'), /^\d{8}$/);
+});
