@@ -156,4 +156,10 @@ test('endesa email with NIE rejected -> notice to Yann with manual link', async 
   const out = await bad.handleEndesaEmail({ html: 'factura de luz <a href="https://click.digital.endesaclientes.com/?qs=1">DESCARGAR FACTURA</a>' });
   assert.equal(out.action, 'error');
   assert.match(textOf(out.outbox[0]), /rejected the document.*bills\/new/);
+  assert.match(out.error, /rejected the document/);
+  db.prepare(`DELETE FROM people WHERE role = 'yann'`).run();
+  const out2 = await bad.handleEndesaEmail({ html: 'factura de luz <a href="https://click.digital.endesaclientes.com/?qs=1">DESCARGAR FACTURA</a>' });
+  assert.equal(out2.outbox.length, 0);
+  assert.match(out2.error, /rejected the document/);
+  assert.match(out2.warning, /seed script/);
 });

@@ -161,11 +161,16 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
     return { outbox: [], action: 'ignored' };
   }
 
+  const noYannWarning = () => (people().yann?.wa_phone ? {} : { warning: 'No WhatsApp number for role "yann": run the seed script (and check /data is a persistent volume).' });
+
   /** New Endesa email -> download + parse the bill -> ask the neighbor for the photo. */
   async function handleEndesaEmail({ html }) {
     if (!/factura de luz/i.test(html ?? '')) return { outbox: [], action: 'ignored_not_luz' };
     const link = extractDownloadLink(html);
-    if (!link) return { outbox: toYann(`Endesa email without a download link. Create the bill by hand: ${publicUrl}/bills/new`), action: 'no_link' };
+    if (!link) {
+      const error = 'Endesa email without a download link.';
+      return { outbox: toYann(`${error} Create the bill by hand: ${publicUrl}/bills/new`), action: 'no_link', error, ...noYannWarning() };
+    }
     try {
       const pdf = await downloadBillPdf(link, endesaNie, { fetchImpl });
       const parsed = parseEndesaBill(await pdfText(pdf));
@@ -182,11 +187,11 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
         ? 'asked the neighbor for the meter photo.'
         : 'no neighbor number set: send me their meter photo or reply with the reading.';
       outbox.push(...toYann(`New electricity bill ${bill.invoice_no} (${formatEur(bill.total_cents)}), ${ask}${extra} ${m.url}`));
-      return { outbox, bill_id: bill.id, action: 'bill_created' };
+      return { outbox, bill_id: bill.id, action: 'bill_created', ...noYannWarning() };
     } catch (e) {
       if (e instanceof HttpError && e.status === 409) return { outbox: [], action: 'duplicate' };
       if (!(e instanceof HttpError || e instanceof EndesaError)) console.error(e);
-      return { outbox: toYann(`Could not process the Endesa bill: ${e.message} Create it by hand: ${publicUrl}/bills/new`), action: 'error' };
+      return { outbox: toYann(`Could not process the Endesa bill: ${e.message} Create it by hand: ${publicUrl}/bills/new`), action: 'error', error: e.message, ...noYannWarning() };
     }
   }
 
