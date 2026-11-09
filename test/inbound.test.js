@@ -84,6 +84,16 @@ test('implausible reading -> neighbor thanked, Yann asked to review, then Yann o
   assert.equal(svc.billDetail(bill.id).split.neighbor_kwh, 50);
 });
 
+test('a bare number from Yann is the neighbor reading (with the usual guards)', () => {
+  const bill = newBill();
+  let out = inbound.handleWhatsApp({ from: P.yann, type: 'text', text: '37.2' });
+  assert.equal(out.action, 'rejected', 'below the previous reading 12345');
+  assert.match(textOf(out.outbox[0]), /Negative/);
+  out = inbound.handleWhatsApp({ from: P.yann, type: 'text', text: '12445' });
+  assert.equal(out.action, 'split_sent');
+  assert.equal(svc.billDetail(bill.id).split.neighbor_kwh, 100);
+});
+
 test('photo without open bill, other people ignored, help/estado for Yann', () => {
   let out = inbound.handleWhatsApp({ from: P.neighbor, type: 'image', reading: 1 });
   assert.deepEqual(types(out), [`${P.neighbor}:text`, `${P.yann}:template:samac_notice`]);

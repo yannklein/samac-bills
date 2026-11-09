@@ -144,6 +144,10 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
           const status = bill ? `${bill.invoice_no} (${fmtDate(bill.period_from)} – ${fmtDate(bill.period_to)}): ${bill.status}. ${summary(bill.id)}` : 'No bills yet.';
           return { outbox: [wa.text(from, `${status} ${publicUrl}`)], action: 'status' };
         }
+        // A bare number from Yann = the neighbor's meter reading (e.g. relayed from the neighbor)
+        const typed = /^-?[\d.,]+$/.test(text) ? parseReading(text) : null;
+        const open = typed != null ? svc.openBill() : null;
+        if (open) return confirmAndSend(open, { reading: typed, source: 'typed' }, { from, role });
         return { outbox: [wa.text(from, HELP)], action: 'help' };
       }
       // Neighbor typing the reading (after "No", or instead of a photo)
