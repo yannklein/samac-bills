@@ -9,21 +9,29 @@ export function makeAuth(config) {
     ? createRemoteJWKSet(new URL(`https://${cfTeamDomain}/cdn-cgi/access/certs`))
     : null;
 
-  async function userEmail(req) {
-    if (devUserEmail) return String(req.query.as || req.get('x-dev-user') || devUserEmail).toLowerCase();
+  /** Returns { email } or { reason } explaining why the visitor was refused. */
+  async function identify(req) {
+    if (devUserEmail) return { email: String(req.query.as || req.get('x-dev-user') || devUserEmail).toLowerCase() };
     const token = req.get('cf-access-jwt-assertion');
-    if (!token || !jwks) return null;
+    if (!token) {
+      return { reason: 'La petición no pasó por Cloudflare Access (no hay token). Revisa que exista una aplicación de Access para este dominio sin path, con política Allow.' };
+    }
+    if (!jwks || !cfAud) {
+      return { reason: 'Faltan CF_ACCESS_TEAM_DOMAIN o CF_ACCESS_AUD en la configuración de la app.' };
+    }
     try {
       const { payload } = await jwtVerify(token, jwks, { issuer: `https://${cfTeamDomain}`, audience: cfAud });
-      return payload.email ? String(payload.email).toLowerCase() : null;
-    } catch {
-      return null;
+      if (!payload.email) return { reason: 'El token de Cloudflare Access no contiene email.' };
+      return { email: String(payload.email).toLowerCase() };
+    } catch (e) {
+      console.warn(`[auth] Cloudflare Access token rejected: ${e.code ?? ''} ${e.message}`);
+      return { reason: `Token de Cloudflare Access no válido (${e.code ?? e.message}). Revisa CF_ACCESS_TEAM_DOMAIN y que CF_ACCESS_AUD sea el AUD de la aplicación principal.` };
     }
   }
 
   const viewer = async (req, res, next) => {
-    const email = await userEmail(req);
-    if (!email) return res.status(403).send('Acceso denegado (Cloudflare Access).');
+    const { email, reason } = await identify(req);
+    if (!email) return res.status(403).send(`Acceso denegado: ${reason}`);
     req.user = { email, isAdmin: email === adminEmail.toLowerCase() };
     res.locals.user = req.user;
     next();
