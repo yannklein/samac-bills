@@ -1,0 +1,25 @@
+{
+  "name": "samac-bills",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared electricity bill split for the Samac apartments",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "DEV_USER_EMAIL=${DEV_USER_EMAIL:-yann.klein@me.com} DATA_DIR=./data node --watch src/server.js",
+    "test": "node --test test/*.test.js",
+    "seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "ejs": "^7.0.2",
+    "express": "^5.3.0",
+    "jose": "^6.2.16",
+    "multer": "^2.5.0",
+    "unpdf": "^2.1.0"
+  }
+}

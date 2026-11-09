@@ -1,0 +1,9 @@
+{
+  "people": [
+    { "role": "yann", "name": "Yann", "wa_phone": "+34 600 000 001", "email": "yann.klein@me.com" },
+    { "role": "adriana", "name": "Adriana", "wa_phone": "+34 600 000 002", "email": "adriana@example.com" },
+    { "role": "marcela", "name": "Marcela", "wa_phone": "+34 600 000 003", "email": "marcela@example.com" },
+    { "role": "neighbor", "name": "Vecino", "wa_phone": "+34 600 000 004", "email": "vecino@example.com" }
+  ],
+  "seed_reading": 12345
+}

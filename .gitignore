@@ -1,0 +1,8 @@
+node_modules/
+data/
+# Real bills/emails contain personal data (NIE, IBAN, address)
+fixtures/*.pdf
+fixtures/*.eml
+fixtures/*.txt
+people.json
+.env

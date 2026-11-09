@@ -1,0 +1,53 @@
+<%- include('partials/head', { title: 'Nueva factura' }) %>
+<p><a href="/">← Pagos</a></p>
+<h1>Nueva factura manual</h1>
+<p class="muted">Para cuando la automatización falla. Sube el PDF de Endesa: se rellena solo y puedes corregir cualquier campo.</p>
+
+<section class="box">
+  <h3>1. PDF de la factura</h3>
+  <input type="file" id="pdf" accept="application/pdf">
+  <p id="parse-status" class="muted small"></p>
+  <ul id="parse-errors" class="error"></ul>
+</section>
+
+<form id="bill-form" method="post" action="/bills" enctype="multipart/form-data" class="box" hidden>
+  <h3>2. Datos de la factura</h3>
+  <input type="hidden" name="pdf_path" id="pdf_path">
+  <input type="hidden" name="items_json" id="items_json">
+  <div class="grid">
+    <label>Nº factura <input name="invoice_no" id="invoice_no" required></label>
+    <label>Emitida <input type="date" name="issued_at" id="issued_at"></label>
+    <label>Desde <input type="date" name="period_from" id="period_from" required></label>
+    <label>Hasta <input type="date" name="period_to" id="period_to" required></label>
+    <label>Días <input name="days" id="days" inputmode="numeric"></label>
+    <label>Consumo total (kWh) <input name="kwh_total" id="kwh_total" inputmode="decimal" required></label>
+    <label>Total factura (€) <input name="total" id="total" inputmode="decimal" required></label>
+  </div>
+
+  <h4>Líneas</h4>
+  <div class="table-wrap">
+  <table class="breakdown" id="items">
+    <thead><tr><th>Concepto</th><th>Reparto</th><th class="num">Importe (€)</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table>
+  </div>
+  <button type="button" class="link" id="add-item">+ Añadir línea</button>
+  <p id="sum-check" class="small"></p>
+
+  <h3>3. Contador del vecino</h3>
+  <div class="grid">
+    <label>Lectura actual <input name="reading" id="reading" inputmode="decimal" placeholder="<%= lastReading != null ? 'anterior: ' + lastReading : 'sin lectura anterior' %>"></label>
+    <label>…o kWh del vecino directamente <input name="neighbor_kwh" id="neighbor_kwh" inputmode="decimal"></label>
+    <label>Foto (opcional) <input type="file" name="photo" accept="image/*"></label>
+  </div>
+  <p class="muted small">Si lo dejas vacío, la factura queda “esperando foto del vecino” y el flujo de WhatsApp puede completarla.</p>
+
+  <h3>4. Vista previa</h3>
+  <div id="preview" class="muted">Rellena la lectura o los kWh para ver el reparto.</div>
+
+  <button id="save">Guardar factura</button>
+</form>
+
+<script>window.SAMAC = { lastReading: <%- JSON.stringify(lastReading) %> };</script>
+<script type="module" src="/new.js"></script>
+<%- include('partials/foot') %>

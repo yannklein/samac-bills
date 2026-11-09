@@ -1,0 +1,93 @@
+<%- include('partials/head', { title: bill.invoice_no }) %>
+<%
+  const confirmed = readings.find((r) => r.status === 'confirmed');
+  const candidate = readings.find((r) => r.status === 'candidate');
+  const bd = split?.breakdown;
+  const paid = Object.fromEntries(payments.map((p) => [p.payer, p]));
+  const names = { neighbor: people.neighbor?.name || 'Vecino', marcela: people.marcela?.name || 'Marcela' };
+%>
+<p><a href="/">← Pagos</a></p>
+<div class="row between">
+  <h1>Luz <%= esDate(bill.period_from) %> – <%= esDate(bill.period_to) %></h1>
+  <span class="badge s-<%= bill.status %>"><%= STATUS_LABELS[bill.status] %></span>
+</div>
+<p class="muted">Factura <%= bill.invoice_no %> · emitida <%= esDate(bill.issued_at) %> · <%= bill.days %> días · <%= esKwh(bill.kwh_total) %> · <%= bill.source === 'manual' ? 'creada a mano' : 'automática' %><%= bill.status_note ? ' · ' + bill.status_note : '' %></p>
+
+<% if (split) { %>
+<section class="cards">
+  <div class="card"><div class="label"><%= names.neighbor %> → Yann</div><div class="amount"><%= formatEur(split.neighbor_cents) %></div><div class="muted"><%= esKwh(split.neighbor_kwh) %></div>
+    <% if (user.isAdmin) { %><form method="post" action="/bills/<%= bill.id %>/paid"><input type="hidden" name="payer" value="neighbor"><button class="link"><%= paid.neighbor ? '✓ Pagado' : 'Marcar pagado' %></button></form><% } else if (paid.neighbor) { %><div class="paid">✓ Pagado</div><% } %>
+  </div>
+  <div class="card"><div class="label"><%= names.marcela %> → Yann (1/3 casa)</div><div class="amount"><%= formatEur(split.marcela_cents) %></div>
+    <% if (user.isAdmin) { %><form method="post" action="/bills/<%= bill.id %>/paid"><input type="hidden" name="payer" value="marcela"><button class="link"><%= paid.marcela ? '✓ Pagado' : 'Marcar pagado' %></button></form><% } else if (paid.marcela) { %><div class="paid">✓ Pagado</div><% } %>
+  </div>
+  <div class="card"><div class="label">Yann y Adriana (2/3 casa)</div><div class="amount"><%= formatEur(split.yann_adriana_cents) %></div><div class="muted">Casa total <%= formatEur(split.home_cents) %> · <%= esKwh(split.home_kwh) %></div></div>
+</section>
+<p class="muted small"><%= split.sent_at ? 'Enviado por WhatsApp el ' + split.sent_at + ' UTC' : 'Aún no enviado por WhatsApp.' %> Calculado el <%= split.computed_at %> UTC.</p>
+
+<h2>Desglose</h2>
+<div class="table-wrap">
+<table class="breakdown">
+  <thead><tr><th>Concepto</th><th>Reparto</th><th class="num">Factura</th><th class="num"><%= names.neighbor %></th><th class="num">Casa</th></tr></thead>
+  <tbody>
+    <% for (const l of bd.lines.filter((l) => l.kind !== 'tax')) { %>
+      <tr><td><%= l.label %></td><td class="muted"><%= KIND_LABELS[l.kind] %></td><td class="num"><%= formatEur(l.amountCents) %></td><td class="num"><%= formatEur(l.neighborCents) %></td><td class="num"><%= formatEur(l.homeCents) %></td></tr>
+    <% } %>
+    <tr class="subtotal"><td>Subtotal antes de impuestos</td><td class="muted">ratio <%= (bd.taxRatioNeighbor * 100).toFixed(1).replace('.', ',') %> % / <%= ((1 - bd.taxRatioNeighbor) * 100).toFixed(1).replace('.', ',') %> %</td><td class="num"><%= formatEur(bd.pretax.total) %></td><td class="num"><%= formatEur(bd.pretax.neighbor) %></td><td class="num"><%= formatEur(bd.pretax.home) %></td></tr>
+    <% for (const l of bd.lines.filter((l) => l.kind === 'tax')) { %>
+      <tr><td><%= l.label %></td><td class="muted"><%= KIND_LABELS[l.kind] %></td><td class="num"><%= formatEur(l.amountCents) %></td><td class="num"><%= formatEur(l.neighborCents) %></td><td class="num"><%= formatEur(l.homeCents) %></td></tr>
+    <% } %>
+    <tr class="total"><td>Total</td><td></td><td class="num"><%= formatEur(bill.total_cents) %></td><td class="num"><%= formatEur(split.neighbor_cents) %></td><td class="num"><%= formatEur(split.home_cents) %></td></tr>
+  </tbody>
+</table>
+</div>
+<p class="muted small">Fijo a medias · variable según kWh (<%= (bd.kwhShare * 100).toFixed(1).replace('.', ',') %> % vecino) · impuestos según el ratio del subtotal de cada parte · el redondeo va a la casa para que cuadre con la factura.</p>
+<% } else { %>
+  <p class="callout">Aún no hay reparto: falta la lectura del contador del vecino.<% if (candidate) { %> Última lectura propuesta: <strong><%= candidate.reading_kwh %></strong> (pendiente de confirmar).<% } %></p>
+<% } %>
+
+<h2>Lecturas del contador del vecino</h2>
+<p>
+  Anterior: <strong><%= previous ? previous.reading_kwh : '—' %></strong>
+  → Actual: <strong><%= confirmed ? confirmed.reading_kwh : (split?.reading_kwh ?? '—') %></strong>
+  <% if (split) { %> = <strong><%= esKwh(split.neighbor_kwh) %></strong><% } %>
+</p>
+
+<h2>Justificantes</h2>
+<div class="evidence">
+  <div>
+    <h3>Factura</h3>
+    <% if (bill.pdf_path) { %><a class="button secondary" href="/files/<%= bill.pdf_path %>" target="_blank">📄 Ver PDF</a><% } else { %><span class="muted">Sin PDF</span><% } %>
+  </div>
+  <div>
+    <h3>Contador vecino (actual)</h3>
+    <% const photo = confirmed?.photo_path || candidate?.photo_path; %>
+    <% if (photo) { %><a href="/files/<%= photo %>" target="_blank"><img src="/files/<%= photo %>" alt="Contador actual"></a><% } else { %><span class="muted">Sin foto</span><% } %>
+  </div>
+  <div>
+    <h3>Contador vecino (anterior)</h3>
+    <% if (previous?.photo_path) { %><a href="/files/<%= previous.photo_path %>" target="_blank"><img src="/files/<%= previous.photo_path %>" alt="Contador anterior"></a><% } else { %><span class="muted"><%= previous ? 'Lectura ' + previous.reading_kwh + ' (sin foto)' : 'Sin lectura' %></span><% } %>
+  </div>
+</div>
+
+<% if (user.isAdmin) { %>
+<h2>Admin</h2>
+<div class="admin">
+  <form method="post" action="/bills/<%= bill.id %>/reading" enctype="multipart/form-data" class="box">
+    <h3><%= split ? 'Corregir lectura y recalcular' : 'Introducir lectura' %></h3>
+    <label>Lectura del contador del vecino <input name="reading" inputmode="decimal" placeholder="<%= previous ? 'anterior: ' + previous.reading_kwh : '' %>"></label>
+    <label>…o kWh del vecino directamente <input name="neighbor_kwh" inputmode="decimal"></label>
+    <label>Foto (opcional) <input type="file" name="photo" accept="image/*"></label>
+    <button>Calcular</button>
+  </form>
+  <% if (split) { %>
+  <form method="post" action="/bills/<%= bill.id %>/send" class="box" onsubmit="return confirm('¿Enviar el reparto por WhatsApp a los 4?')">
+    <h3>WhatsApp</h3>
+    <p class="muted small">Envía el mensaje de reparto a Yann, Adriana, Marcela y el vecino.</p>
+    <button <%= n8nConfigured ? '' : 'disabled' %>>Enviar por WhatsApp</button>
+    <% if (!n8nConfigured) { %><p class="muted small">N8N_SEND_WEBHOOK_URL no configurado.</p><% } %>
+  </form>
+  <% } %>
+</div>
+<% } %>
+<%- include('partials/foot') %>
