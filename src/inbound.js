@@ -178,7 +178,10 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
       const outbox = [];
       if (m.neighbor?.wa_phone) outbox.push(wa.template(m.neighbor.wa_phone, TEMPLATES.requestReading, m.request_vars));
       const extra = superseded.length ? ` Bill ${superseded.map((b) => b.invoice_no).join(', ')} never got a reading and was replaced.` : '';
-      outbox.push(...toYann(`New electricity bill ${bill.invoice_no} (${formatEur(bill.total_cents)}), asked the neighbor for the meter photo.${extra} ${m.url}`));
+      const ask = m.neighbor?.wa_phone
+        ? 'asked the neighbor for the meter photo.'
+        : 'no neighbor number set: send me their meter photo or reply with the reading.';
+      outbox.push(...toYann(`New electricity bill ${bill.invoice_no} (${formatEur(bill.total_cents)}), ${ask}${extra} ${m.url}`));
       return { outbox, bill_id: bill.id, action: 'bill_created' };
     } catch (e) {
       if (e instanceof HttpError && e.status === 409) return { outbox: [], action: 'duplicate' };

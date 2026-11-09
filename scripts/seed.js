@@ -1,6 +1,7 @@
 // Usage: DATA_DIR=/data node scripts/seed.js people.json [--reset]
 // people.json: see people.example.json. Upserts people and (optionally) adds the seed meter reading.
-// --reset deletes ALL bills, readings, splits, payments and stored files (PDFs/photos) first.
+// --reset deletes ALL bills, readings, splits, payments, stored files (PDFs/photos) and people first,
+// so the people list becomes exactly the file (e.g. no neighbor = Yann relays the meter photo).
 import { readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { openDb } from '../src/db.js';
@@ -19,11 +20,11 @@ const db = openDb(dataDir);
 if (reset) {
   const counts = db.transaction(() => {
     const n = db.prepare('SELECT COUNT(*) AS n FROM bills').get().n;
-    db.exec('DELETE FROM payments; DELETE FROM splits; DELETE FROM readings; DELETE FROM bills;');
+    db.exec('DELETE FROM payments; DELETE FROM splits; DELETE FROM readings; DELETE FROM bills; DELETE FROM people;');
     return n;
   })();
   rmSync(path.join(dataDir, 'files'), { recursive: true, force: true });
-  console.log(`reset: deleted ${counts} bill(s), all readings, splits, payments and stored files`);
+  console.log(`reset: deleted ${counts} bill(s), all readings, splits, payments, stored files and people`);
 }
 
 const up = db.prepare(`INSERT INTO people (role, name, wa_phone, email) VALUES (@role, @name, @wa_phone, @email)

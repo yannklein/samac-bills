@@ -135,6 +135,19 @@ test('endesa email -> bill + template to neighbor + notice to Yann; duplicates a
     assert.equal(out.action, 'ignored_not_luz');
   });
 
+test('without a neighbor: Yann gets the request, relays the photo, split goes to 3 people',
+  { skip: !(existsSync(realPdf) && existsSync(realEml)) && 'local fixtures missing' }, async () => {
+    db.prepare(`DELETE FROM people WHERE role = 'neighbor'`).run();
+    const raw = readFileSync(realEml, 'utf8');
+    let out = await inbound.handleEndesaEmail({ html: raw.slice(raw.indexOf('<')) });
+    assert.deepEqual(types(out), [`${P.yann}:template:samac_notice`]);
+    assert.match(textOf(out.outbox[0]), /no neighbor number set/);
+    out = inbound.handleWhatsApp({ from: P.yann, type: 'image', reading: 12445, photoBuffer: Buffer.from('jpg') });
+    out = inbound.handleWhatsApp({ from: P.yann, type: 'button', button_id: out.outbox[0].body.interactive.action.buttons[0].reply.id });
+    assert.equal(out.action, 'split_sent');
+    assert.deepEqual(types(out).sort(), [P.yann, P.adriana, P.marcela].map((p) => `${p}:template:samac_split`).sort());
+  });
+
 test('endesa email with NIE rejected -> notice to Yann with manual link', async () => {
   const bad = makeInbound({
     svc, wa: makeWhatsApp({ phoneNumberId: '1' }), publicUrl: 'https://bills.example', endesaNie: 'Z0000000T',
