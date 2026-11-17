@@ -13,6 +13,7 @@ import { parseReading } from './parseReading.js';
 import { makeWhatsApp } from './whatsapp.js';
 import { makeInbound } from './inbound.js';
 import { makeAdmin, ROLES, ROLE_LABELS } from './admin.js';
+import { makeT, formatMoney, formatNumber, pickLang, LANGS } from './i18n.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -22,15 +23,6 @@ const STATUS_LABELS = {
   awaiting_confirmation: 'Waiting for confirmation',
   ready: 'Calculated, not sent',
   sent: 'Sent',
-  superseded: 'Replaced',
-  error: 'Error',
-};
-// Same statuses, worded for the neighbor
-const NEIGHBOR_STATUS_LABELS = {
-  awaiting_reading: 'Waiting for your meter reading',
-  awaiting_confirmation: 'Checking your meter reading',
-  ready: 'Calculated',
-  sent: 'Sent to you',
   superseded: 'Replaced',
   error: 'Error',
 };
@@ -94,7 +86,10 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
   app.use(express.json({ limit: '1mb' }));
   app.get('/healthz', (req, res) => res.json({ ok: true }));
   // Public page required by Meta to publish the WhatsApp app (Cloudflare Access bypass on /privacy)
-  app.get('/privacy', (req, res) => res.render('privacy', { contact: config.adminEmail }));
+  app.get('/privacy', (req, res) => {
+    const lang = pickLang(req.query.lang, req.get('accept-language'));
+    res.render('privacy', { contact: config.adminEmail, lang });
+  });
 
   // ---------- API for n8n (Bearer token, internal network) ----------
   const api = express.Router();
@@ -169,6 +164,20 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
   api.get('/people', (req, res) => res.json(svc.people()));
   app.use('/api', api);
 
+  /** Per-request language helpers for views and flash messages. */
+  function setLanguage(req, res, lang) {
+    const t = makeT(lang);
+    req.t = t;
+    req.lang = lang;
+    Object.assign(res.locals, {
+      lang, t,
+      formatEur: (c) => formatMoney(c, lang),
+      fmtNum: (n, digits) => formatNumber(n, lang, digits),
+      fmtKwh: (n) => (n == null ? '—' : `${formatNumber(n, lang)} kWh`),
+      KIND_LABELS: Object.fromEntries(['fixed', 'variable', 'tax', 'unknown'].map((k) => [k, t(`kind.${k}`)])),
+    });
+  }
+
   // ---------- Web UI (Cloudflare Access) ----------
   const web = express.Router();
   web.use(auth.viewer);
@@ -185,16 +194,34 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
       neighbor: nameOf.neighbor || 'Neighbor', marcela: nameOf.marcela || 'Marcela',
       adriana: nameOf.adriana || 'Adriana', yann: nameOf.yann || 'Yann',
     };
-    names.home = `${names.marcela}, ${names.adriana} and ${names.yann}`;
+    // Language: the user's saved choice, else the browser's
+    const saved = db.prepare('SELECT lang FROM prefs WHERE email = ?').get(req.user.email)?.lang;
+    setLanguage(req, res, pickLang(saved, req.get('accept-language')));
+    const t = req.t;
+    res.locals.currentUrl = req.originalUrl;
+    // Dev only: keep the impersonated user (?as=) on the language form
+    res.locals.devAs = config.devUserEmail && req.query.as ? String(req.query.as) : '';
+    if (!nameOf.neighbor) names.neighbor = t('role.neighbor');
+    names.home = `${names.marcela}, ${names.adriana} ${req.lang === 'es' ? 'y' : 'and'} ${names.yann}`;
     res.locals.names = names;
-    res.locals.STATUS_TEXT = req.user.isNeighbor ? NEIGHBOR_STATUS_LABELS : STATUS_LABELS;
+    res.locals.STATUS_TEXT = Object.fromEntries(Object.keys(STATUS_LABELS).map((s) => [
+      s, req.user.isNeighbor ? t(`nstatus.${s}`) : t(`status.${s}`, { neighbor: names.neighbor }),
+    ]));
     if (req.user.isAdmin || !emails.length || emails.includes(req.user.email)) return next();
     res.status(403).send('Your email is not authorized.');
   });
   web.use('/files', express.static(svc.filesDir, { dotfiles: 'deny', index: false }));
   // Pure modules shared with the browser for the live preview
+  web.post('/prefs/lang', (req, res) => {
+    const lang = LANGS.includes(req.body.lang) ? req.body.lang : 'en';
+    db.prepare(`INSERT INTO prefs (email, lang) VALUES (?, ?)
+      ON CONFLICT(email) DO UPDATE SET lang = excluded.lang, updated_at = datetime('now')`).run(req.user.email, lang);
+    const back = String(req.body.back || '/');
+    res.redirect(back.startsWith('/') && !back.startsWith('//') ? back.replace(/([?&])msg=[^&]*&?/, '$1').replace(/[?&]$/, '') : '/');
+  });
+
   web.get('/js/:mod.js', (req, res, next) => {
-    if (!['splitLuz', 'money', 'parseReading'].includes(req.params.mod)) return next();
+    if (!['splitLuz', 'money', 'parseReading', 'i18n'].includes(req.params.mod)) return next();
     res.type('application/javascript').sendFile(path.join(here, `${req.params.mod}.js`));
   });
 
@@ -254,7 +281,7 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
     const neighborKwh = num(req.body.neighbor_kwh);
     const photoPath = req.file ? svc.saveFile(req.file.buffer, imageExt(req.file.mimetype), 'meter') : undefined;
     svc.confirm(id, { reading: neighborKwh != null ? null : reading, neighborKwh, source: 'manual', override: true, photoPath });
-    res.redirect(`/bills/${id}?msg=${encodeURIComponent('Split recalculated.')}`);
+    res.redirect(`/bills/${id}?msg=${encodeURIComponent(req.t('msg.splitRecalculated'))}`);
   });
 
   web.post('/bills/:id/send', auth.admin, async (req, res) => {
@@ -267,7 +294,7 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
       body: JSON.stringify({ bill_id: id, outbox: inbound.splitOutbox(id) }),
     });
     if (r.ok) svc.markSent(id);
-    const msg = r.ok ? 'Sent on WhatsApp.' : `n8n answered ${r.status}: nothing was sent.`;
+    const msg = r.ok ? req.t('msg.sent') : req.t('msg.n8nFailed', { status: r.status });
     res.redirect(`/bills/${id}?msg=${encodeURIComponent(msg)}`);
   });
 
@@ -288,19 +315,19 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
 
   web.post('/admin/people', auth.admin, (req, res) => {
     admin.savePerson(req.body);
-    back(res, '/admin', `${ROLE_LABELS[req.body.role] ?? req.body.role} saved.`);
+    back(res, '/admin', req.t('msg.saved', { name: req.body.name || req.t(`role.${req.body.role}`) }));
   });
 
   web.post('/admin/people/:role/delete', auth.admin, (req, res) => {
     admin.deletePerson(req.params.role);
-    back(res, '/admin', `${ROLE_LABELS[req.params.role] ?? req.params.role} removed.`);
+    back(res, '/admin', req.t('msg.removed', { name: req.t(`role.${req.params.role}`) }));
   });
 
   web.post('/admin/seed', auth.admin, (req, res) => {
     const { recalculated, skippedSent } = admin.setSeed(readingNum(req.body.reading));
-    const parts = ['Previous meter reading saved.'];
-    if (recalculated.length) parts.push(`Recalculated: ${recalculated.join(', ')} (send them again).`);
-    if (skippedSent.length) parts.push(`Not changed because already sent: ${skippedSent.join(', ')} (fix their reading on the bill page if needed).`);
+    const parts = [req.t('msg.seedSaved')];
+    if (recalculated.length) parts.push(req.t('msg.recalculated', { list: recalculated.join(', ') }));
+    if (skippedSent.length) parts.push(req.t('msg.skippedSent', { list: skippedSent.join(', ') }));
     back(res, '/admin', parts.join(' '));
   });
 
@@ -328,17 +355,17 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
       invoice_no: b.invoice_no, period_from: b.period_from, period_to: b.period_to, days: Number(b.days) || null,
       issued_at: b.issued_at, total_cents: parseAmount(b.total), kwh_total: num(b.kwh_total), items,
     });
-    back(res, `/bills/${id}`, recalculated ? 'Bill saved and split recalculated: send it again if needed.' : 'Bill saved.');
+    back(res, `/bills/${id}`, recalculated ? req.t('msg.billSavedRecalc') : req.t('msg.billSaved'));
   });
 
   web.post('/bills/:id/delete', auth.admin, (req, res) => {
     const invoice = admin.deleteBill(Number(req.params.id));
-    back(res, '/', `Bill ${invoice} deleted.`);
+    back(res, '/', req.t('msg.billDeleted', { invoice }));
   });
 
   web.post('/bills/:id/mark-sent', auth.admin, (req, res) => {
     svc.markSent(Number(req.params.id));
-    back(res, `/bills/${req.params.id}`, 'Marked as sent.');
+    back(res, `/bills/${req.params.id}`, req.t('msg.markedSent'));
   });
 
   app.use(express.static(path.join(here, '..', 'public'), { index: false }));
@@ -351,6 +378,7 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
     if (status === 500) console.error(err);
     const body = { error: err.message, ...(err.extra ?? {}) };
     if (req.path.startsWith('/api') || req.accepts(['html', 'json']) === 'json') return res.status(status).json(body);
+    if (!res.locals.t) setLanguage(req, res, pickLang(null, req.get('accept-language')));
     res.status(status).render('error', { status, message: err.message });
   });
 

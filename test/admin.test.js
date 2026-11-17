@@ -180,3 +180,50 @@ test('neighbor view: own share and home total only, read-only', async () => {
   const marcela = await (await fetch(`${base}/bills/${bill.id}?as=marcela@example.com`)).text();
   assert.ok(marcela.includes(eur(d.marcela_cents)));
 });
+
+test('Spanish: browser default, saved per user with the switch, David sees his page in Spanish', async () => {
+  ctx.db.prepare(`INSERT INTO people (role, name, wa_phone, email) VALUES ('neighbor', 'David', NULL, 'david@example.com')
+    ON CONFLICT(role) DO UPDATE SET name = 'David', email = 'david@example.com', wa_phone = NULL`).run();
+  ctx.db.prepare(`DELETE FROM prefs`).run();
+  const bill = newBill('ES1', '2027-03-01');
+  ctx.svc.confirm(bill.id, { neighborKwh: 100, source: 'manual', override: true });
+  const as = '?as=david@example.com';
+
+  // Spanish browser -> Spanish, without any saved preference
+  let page = await (await fetch(`${base}/bills/${bill.id}${as}`, { headers: { 'Accept-Language': 'es-ES,es;q=0.9' } })).text();
+  assert.match(page, /<html lang="es">/);
+  assert.match(page, /Hola David/);
+  assert.match(page, /Pagas a Yann/);
+  assert.match(page, /32,28 €/);
+  assert.match(page, /Piso de Marcela, Adriana y Yann/);
+  assert.match(page, /Cómo se ha calculado tu parte/);
+  assert.match(page, /Fijo \(50\/50\)/);
+  for (const english of ['You pay', 'Your meter', 'Evidence', 'Breakdown', '€32.28']) assert.ok(!page.includes(english), `no "${english}"`);
+
+  // David switches to English: saved for him, whatever the browser says
+  const r = await form('/prefs/lang', { lang: 'en', back: `/bills/${bill.id}?msg=x` }, 'david@example.com');
+  assert.equal(r.status, 302);
+  assert.equal(r.headers.get('location'), `/bills/${bill.id}`, 'goes back to the page, without the old flash message');
+  page = await (await fetch(`${base}/bills/${bill.id}${as}`, { headers: { 'Accept-Language': 'es-ES' } })).text();
+  assert.match(page, /You pay Yann/);
+  assert.match(page, /€32\.28/);
+
+  // ...and only for him: Yann with a Spanish browser still gets Spanish
+  const yann = await (await fetch(`${base}/bills/${bill.id}`, { headers: { 'Accept-Language': 'es' } })).text();
+  assert.match(yann, /Desglose/);
+
+  // Open redirects are refused
+  const evil = await form('/prefs/lang', { lang: 'en', back: '//evil.example.com' }, 'david@example.com');
+  assert.equal(evil.headers.get('location'), '/');
+
+  // Spanish list, admin page and edit page render without missing keys
+  const list = await (await fetch(`${base}/${as}`)).text(); // David is back on English now
+  assert.match(list, /Your electricity bills/);
+  await form('/prefs/lang', { lang: 'es', back: '/' });
+  for (const url of ['/', '/admin', `/bills/${bill.id}/edit`, '/bills/new', `/bills/${bill.id}`]) {
+    const html = (await (await fetch(`${base}${url}`)).text()).replace(/<script[\s\S]*?<\/script>/g, '');
+    assert.doesNotMatch(html, /\b(?:bill|list|admin|form|new|edit|kind|status|nstatus|msg|role)\.[a-zA-Z]+\b(?![^<]*>)/, `untranslated key on ${url}`);
+  }
+  const privacy = await (await fetch(`${base}/privacy?lang=es`)).text();
+  assert.match(privacy, /Borrado de datos/);
+});

@@ -4,132 +4,113 @@
   const candidate = readings.find((r) => r.status === 'candidate');
   const bd = split?.breakdown;
   const paid = Object.fromEntries(payments.map((p) => [p.payer, p]));
-  const pct = (x) => (x * 100).toFixed(1);
-  const me = user.isNeighbor; // David's own view: his share only, never the split inside the other apartment
-  const t = me ? {
-    back: '← Your bills',
-    meCol: 'You',
-    homeCol: names.home,
-    readings: 'Your meter readings',
-    meterNow: 'Your meter (this bill)',
-    meterPrev: 'Your meter (previous bill)',
-    kwhShare: 'yours',
-    roundTo: `${names.home}'s side`,
-    waiting: 'Not calculated yet: waiting for the reading of your meter.',
-  } : {
-    back: '← Payments',
-    meCol: names.neighbor,
-    homeCol: 'Home',
-    readings: `${names.neighbor}'s meter readings`,
-    meterNow: `${names.neighbor}'s meter (current)`,
-    meterPrev: `${names.neighbor}'s meter (previous)`,
-    kwhShare: names.neighbor,
-    roundTo: 'the home side',
-    waiting: `No split yet: waiting for ${names.neighbor}'s meter reading.`,
-  };
+  const pct = (x) => fmtNum(x * 100, 1);
+  const me = user.isNeighbor; // the neighbor's own view: his share only, never the split inside the other apartment
+  const v = { name: names.neighbor, yann: names.yann, adriana: names.adriana, marcela: names.marcela, neighbor: names.neighbor };
+  const reading = (r) => fmtNum(r);
 %>
-<p><a href="/"><%= t.back %></a></p>
+<p><a href="/"><%= me ? t('bill.backYours') : t('bill.backPayments') %></a></p>
 <div class="row between">
-  <h1>Electricity <%= fmtDate(bill.period_from) %> – <%= fmtDate(bill.period_to) %></h1>
+  <h1><%= t('bill.title', { from: fmtDate(bill.period_from), to: fmtDate(bill.period_to) }) %></h1>
   <span class="badge s-<%= bill.status %>"><%= STATUS_TEXT[bill.status] %></span>
 </div>
 <% if (me) { %>
-<p>Hi <%= names.neighbor %> 👋 Here is your share of the electricity bill our two apartments share, with the details of how it was calculated.</p>
+<p><%= t('bill.hiNeighbor', { name: names.neighbor }) %></p>
 <% } %>
-<p class="muted">Endesa bill <%= bill.invoice_no %> · issued <%= fmtDate(bill.issued_at) %> · <%= bill.days %> days · <%= fmtKwh(bill.kwh_total) %> in total<% if (!me) { %> · <%= bill.source === 'manual' ? 'created by hand' : 'automatic' %><%= bill.status_note ? ' · ' + bill.status_note : '' %><% } %></p>
+<p class="muted"><%= t('bill.meta', { invoice: bill.invoice_no, issued: fmtDate(bill.issued_at), days: bill.days, kwh: fmtKwh(bill.kwh_total) }) %><% if (!me) { %> · <%= bill.source === 'manual' ? t('bill.byHand') : t('bill.automatic') %><%= bill.status_note ? ' · ' + bill.status_note : '' %><% } %></p>
 
 <% if (split) { %>
 <section class="cards">
   <% if (me) { %>
-  <div class="card"><div class="label">You pay <%= names.yann %></div><div class="amount"><%= formatEur(split.neighbor_cents) %></div><div class="muted">for <%= fmtKwh(split.neighbor_kwh) %></div>
-    <% if (paid.neighbor) { %><div class="paid">✓ Paid, thank you!</div><% } %>
+  <div class="card"><div class="label"><%= t('bill.youPay', { name: names.yann }) %></div><div class="amount"><%= formatEur(split.neighbor_cents) %></div><div class="muted"><%= t('bill.forKwh', { kwh: fmtKwh(split.neighbor_kwh) }) %></div>
+    <% if (paid.neighbor) { %><div class="paid"><%= t('bill.paidThanks') %></div><% } %>
   </div>
-  <div class="card"><div class="label"><%= names.home %>'s apartment</div><div class="amount"><%= formatEur(split.home_cents) %></div><div class="muted">for <%= fmtKwh(split.home_kwh) %></div></div>
+  <div class="card"><div class="label"><%= t('bill.apartmentOf', { names: names.home }) %></div><div class="amount"><%= formatEur(split.home_cents) %></div><div class="muted"><%= t('bill.forKwh', { kwh: fmtKwh(split.home_kwh) }) %></div></div>
   <% } else { %>
   <div class="card"><div class="label"><%= names.neighbor %> → <%= names.yann %></div><div class="amount"><%= formatEur(split.neighbor_cents) %></div><div class="muted"><%= fmtKwh(split.neighbor_kwh) %></div>
-    <% if (user.isAdmin) { %><form method="post" action="/bills/<%= bill.id %>/paid"><input type="hidden" name="payer" value="neighbor"><button class="link"><%= paid.neighbor ? '✓ Paid' : 'Mark as paid' %></button></form><% } else if (paid.neighbor) { %><div class="paid">✓ Paid</div><% } %>
+    <% if (user.isAdmin) { %><form method="post" action="/bills/<%= bill.id %>/paid"><input type="hidden" name="payer" value="neighbor"><button class="link"><%= paid.neighbor ? t('bill.paid') : t('bill.markPaid') %></button></form><% } else if (paid.neighbor) { %><div class="paid"><%= t('bill.paid') %></div><% } %>
   </div>
-  <div class="card"><div class="label"><%= names.marcela %> → <%= names.yann %> (1/3 of home)</div><div class="amount"><%= formatEur(split.marcela_cents) %></div>
-    <% if (user.isAdmin) { %><form method="post" action="/bills/<%= bill.id %>/paid"><input type="hidden" name="payer" value="marcela"><button class="link"><%= paid.marcela ? '✓ Paid' : 'Mark as paid' %></button></form><% } else if (paid.marcela) { %><div class="paid">✓ Paid</div><% } %>
+  <div class="card"><div class="label"><%= t('bill.oneThird', { name: names.marcela, yann: names.yann }) %></div><div class="amount"><%= formatEur(split.marcela_cents) %></div>
+    <% if (user.isAdmin) { %><form method="post" action="/bills/<%= bill.id %>/paid"><input type="hidden" name="payer" value="marcela"><button class="link"><%= paid.marcela ? t('bill.paid') : t('bill.markPaid') %></button></form><% } else if (paid.marcela) { %><div class="paid"><%= t('bill.paid') %></div><% } %>
   </div>
-  <div class="card"><div class="label"><%= names.yann %> &amp; <%= names.adriana %> (2/3 of home)</div><div class="amount"><%= formatEur(split.yann_adriana_cents) %></div><div class="muted">Home total <%= formatEur(split.home_cents) %> · <%= fmtKwh(split.home_kwh) %></div></div>
+  <div class="card"><div class="label"><%= t('bill.twoThirds', { yann: names.yann, adriana: names.adriana }) %></div><div class="amount"><%= formatEur(split.yann_adriana_cents) %></div><div class="muted"><%= t('bill.homeTotal', { amount: formatEur(split.home_cents), kwh: fmtKwh(split.home_kwh) }) %></div></div>
   <% } %>
 </section>
-<% if (!me) { %><p class="muted small"><%= split.sent_at ? 'Sent on WhatsApp on ' + split.sent_at + ' UTC.' : 'Not sent on WhatsApp yet.' %> Calculated on <%= split.computed_at %> UTC.</p><% } %>
+<% if (!me) { %><p class="muted small"><%= split.sent_at ? t('bill.sentOn', { date: split.sent_at }) : t('bill.notSent') %> <%= t('bill.calculatedOn', { date: split.computed_at }) %></p><% } %>
 
-<h2><%= me ? 'How your share was calculated' : 'Breakdown' %></h2>
+<h2><%= me ? t('bill.howCalculated') : t('bill.breakdown') %></h2>
 <div class="table-wrap">
 <table class="breakdown">
-  <thead><tr><th>Bill line</th><th>Split</th><th class="num">Bill</th><th class="num"><%= t.meCol %></th><th class="num"><%= t.homeCol %></th></tr></thead>
+  <thead><tr><th><%= t('bill.colLine') %></th><th><%= t('bill.colSplit') %></th><th class="num"><%= t('bill.colBill') %></th><th class="num"><%= me ? t('bill.colYou') : names.neighbor %></th><th class="num"><%= me ? names.home : t('bill.colHome') %></th></tr></thead>
   <tbody>
     <% for (const l of bd.lines.filter((l) => l.kind !== 'tax')) { %>
       <tr><td><%= l.label %></td><td class="muted"><%= KIND_LABELS[l.kind] %></td><td class="num"><%= formatEur(l.amountCents) %></td><td class="num"><%= formatEur(l.neighborCents) %></td><td class="num"><%= formatEur(l.homeCents) %></td></tr>
     <% } %>
-    <tr class="subtotal"><td>Subtotal before taxes</td><td class="muted">ratio <%= pct(bd.taxRatioNeighbor) %>% / <%= pct(1 - bd.taxRatioNeighbor) %>%</td><td class="num"><%= formatEur(bd.pretax.total) %></td><td class="num"><%= formatEur(bd.pretax.neighbor) %></td><td class="num"><%= formatEur(bd.pretax.home) %></td></tr>
+    <tr class="subtotal"><td><%= t('bill.subtotal') %></td><td class="muted"><%= t('bill.ratio', { a: pct(bd.taxRatioNeighbor), b: pct(1 - bd.taxRatioNeighbor) }) %></td><td class="num"><%= formatEur(bd.pretax.total) %></td><td class="num"><%= formatEur(bd.pretax.neighbor) %></td><td class="num"><%= formatEur(bd.pretax.home) %></td></tr>
     <% for (const l of bd.lines.filter((l) => l.kind === 'tax')) { %>
       <tr><td><%= l.label %></td><td class="muted"><%= KIND_LABELS[l.kind] %></td><td class="num"><%= formatEur(l.amountCents) %></td><td class="num"><%= formatEur(l.neighborCents) %></td><td class="num"><%= formatEur(l.homeCents) %></td></tr>
     <% } %>
-    <tr class="total"><td>Total</td><td></td><td class="num"><%= formatEur(bill.total_cents) %></td><td class="num"><%= formatEur(split.neighbor_cents) %></td><td class="num"><%= formatEur(split.home_cents) %></td></tr>
+    <tr class="total"><td><%= t('bill.total') %></td><td></td><td class="num"><%= formatEur(bill.total_cents) %></td><td class="num"><%= formatEur(split.neighbor_cents) %></td><td class="num"><%= formatEur(split.home_cents) %></td></tr>
   </tbody>
 </table>
 </div>
-<p class="muted small">Fixed costs split 50/50 · variable costs by kWh (<%= pct(bd.kwhShare) %>% <%= t.kwhShare %>) · taxes by the ratio of each side's subtotal · rounding goes to <%= t.roundTo %> so the total matches the bill. Line labels are as printed on the Endesa bill.</p>
+<p class="muted small"><%= t('bill.note', { pct: pct(bd.kwhShare), who: me ? t('bill.yours') : names.neighbor, roundTo: me ? t('bill.sideOf', { names: names.home }) : t('bill.homeSide') }) %></p>
 <% } else { %>
-  <p class="callout"><%= t.waiting %><% if (!me && candidate && candidate.reading_kwh != null) { %> Latest proposed reading: <strong><%= candidate.reading_kwh %></strong> (not confirmed yet).<% } %></p>
+  <p class="callout"><%= me ? t('bill.waitingMe') : t('bill.waiting', { name: names.neighbor }) %><% if (!me && candidate && candidate.reading_kwh != null) { %> <%= t('bill.proposed', { reading: reading(candidate.reading_kwh) }) %><% } %></p>
 <% } %>
 
-<h2><%= t.readings %></h2>
+<h2><%= me ? t('bill.readingsMe') : t('bill.readings', { name: names.neighbor }) %></h2>
 <p>
-  Previous: <strong><%= previous ? previous.reading_kwh : '—' %></strong>
-  → Current: <strong><%= confirmed ? confirmed.reading_kwh : (split?.reading_kwh ?? '—') %></strong>
+  <%= t('bill.previous') %>: <strong><%= previous ? reading(previous.reading_kwh) : '—' %></strong>
+  → <%= t('bill.current') %>: <strong><%= confirmed ? reading(confirmed.reading_kwh) : (split?.reading_kwh != null ? reading(split.reading_kwh) : '—') %></strong>
   <% if (split) { %> = <strong><%= fmtKwh(split.neighbor_kwh) %></strong><% } %>
 </p>
 
-<h2>Evidence</h2>
+<h2><%= t('bill.evidence') %></h2>
 <div class="evidence">
   <div>
-    <h3>Endesa bill</h3>
-    <% if (bill.pdf_path) { %><a class="button secondary" href="/files/<%= bill.pdf_path %>" target="_blank">📄 Open PDF</a><% } else { %><span class="muted">No PDF</span><% } %>
+    <h3><%= t('bill.endesaBill') %></h3>
+    <% if (bill.pdf_path) { %><a class="button secondary" href="/files/<%= bill.pdf_path %>" target="_blank"><%= t('bill.openPdf') %></a><% } else { %><span class="muted"><%= t('bill.noPdf') %></span><% } %>
   </div>
   <div>
-    <h3><%= t.meterNow %></h3>
+    <h3><%= me ? t('bill.meterNowMe') : t('bill.meterNow', { name: names.neighbor }) %></h3>
     <% const photo = confirmed?.photo_path || candidate?.photo_path; %>
-    <% if (photo) { %><a href="/files/<%= photo %>" target="_blank"><img src="/files/<%= photo %>" alt="Current meter"></a><% } else { %><span class="muted">No photo</span><% } %>
+    <% if (photo) { %><a href="/files/<%= photo %>" target="_blank"><img src="/files/<%= photo %>" alt=""></a><% } else { %><span class="muted"><%= t('bill.noPhoto') %></span><% } %>
   </div>
   <div>
-    <h3><%= t.meterPrev %></h3>
-    <% if (previous?.photo_path) { %><a href="/files/<%= previous.photo_path %>" target="_blank"><img src="/files/<%= previous.photo_path %>" alt="Previous meter"></a><% } else { %><span class="muted"><%= previous ? 'Reading ' + previous.reading_kwh + ' (no photo)' : 'No reading' %></span><% } %>
+    <h3><%= me ? t('bill.meterPrevMe') : t('bill.meterPrev', { name: names.neighbor }) %></h3>
+    <% if (previous?.photo_path) { %><a href="/files/<%= previous.photo_path %>" target="_blank"><img src="/files/<%= previous.photo_path %>" alt=""></a><% } else { %><span class="muted"><%= previous ? t('bill.readingNoPhoto', { reading: reading(previous.reading_kwh) }) : t('bill.noReading') %></span><% } %>
   </div>
 </div>
 
 <% if (user.isAdmin) { %>
-<h2>Admin</h2>
+<h2><%= t('bill.admin') %></h2>
 <div class="admin">
   <form method="post" action="/bills/<%= bill.id %>/reading" enctype="multipart/form-data" class="box">
-    <h3><%= split ? 'Fix the reading and recalculate' : 'Enter the reading' %></h3>
-    <label><%= names.neighbor %>'s meter reading <input name="reading" inputmode="decimal" placeholder="<%= previous ? 'previous: ' + previous.reading_kwh : '' %>"></label>
-    <label>…or <%= names.neighbor %>'s kWh directly <input name="neighbor_kwh" inputmode="decimal"></label>
-    <label>Photo (optional) <input type="file" name="photo" accept="image/*"></label>
-    <button>Calculate</button>
+    <h3><%= split ? t('bill.fixReading') : t('bill.enterReading') %></h3>
+    <label><%= t('bill.meterReading', v) %> <input name="reading" inputmode="decimal" placeholder="<%= previous ? t('bill.previousPlaceholder', { reading: previous.reading_kwh }) : '' %>"></label>
+    <label><%= t('bill.kwhDirect', v) %> <input name="neighbor_kwh" inputmode="decimal"></label>
+    <label><%= t('bill.photoOptional') %> <input type="file" name="photo" accept="image/*"></label>
+    <button><%= t('bill.calculate') %></button>
   </form>
   <% if (split) { %>
-  <form method="post" action="/bills/<%= bill.id %>/send" class="box" onsubmit="return confirm('Send the split on WhatsApp?')">
-    <h3>WhatsApp</h3>
-    <p class="muted small">Sends the full split to <%= names.yann %>, <%= names.adriana %> and <%= names.marcela %>, and <%= names.neighbor %>'s own share to <%= names.neighbor %> (if they have a WhatsApp number).</p>
-    <button <%= n8nConfigured ? '' : 'disabled' %>>Send on WhatsApp</button>
-    <% if (!n8nConfigured) { %><p class="muted small">N8N_SEND_WEBHOOK_URL is not configured.</p><% } %>
+  <form method="post" action="/bills/<%= bill.id %>/send" class="box" onsubmit="return confirm(<%= JSON.stringify(t('bill.sendConfirm')) %>)">
+    <h3><%= t('bill.whatsapp') %></h3>
+    <p class="muted small"><%= t('bill.sendDesc', v) %></p>
+    <button <%= n8nConfigured ? '' : 'disabled' %>><%= t('bill.send') %></button>
+    <% if (!n8nConfigured) { %><p class="muted small"><%= t('bill.n8nMissing') %></p><% } %>
   </form>
   <% } %>
   <div class="box">
-    <h3>Bill</h3>
-    <p><a class="button secondary" href="/bills/<%= bill.id %>/edit">✎ Edit bill details and lines</a></p>
+    <h3><%= t('bill.billBox') %></h3>
+    <p><a class="button secondary" href="/bills/<%= bill.id %>/edit"><%= t('bill.edit') %></a></p>
     <% if (split && bill.status !== 'sent') { %>
-    <form method="post" action="/bills/<%= bill.id %>/mark-sent" onsubmit="return confirm('Mark as sent without sending anything on WhatsApp?')">
-      <button class="link">Mark as sent (I told everyone myself)</button>
+    <form method="post" action="/bills/<%= bill.id %>/mark-sent" onsubmit="return confirm(<%= JSON.stringify(t('bill.markSentConfirm')) %>)">
+      <button class="link"><%= t('bill.markSent') %></button>
     </form>
     <% } %>
-    <form method="post" action="/bills/<%= bill.id %>/delete" onsubmit="return confirm('Delete bill <%= bill.invoice_no %> with its readings, photos and PDF? This cannot be undone.')">
-      <button class="link danger">Delete this bill</button>
+    <form method="post" action="/bills/<%= bill.id %>/delete" onsubmit="return confirm(<%= JSON.stringify(t('bill.deleteConfirm', { invoice: bill.invoice_no })) %>)">
+      <button class="link danger"><%= t('bill.delete') %></button>
     </form>
   </div>
 </div>

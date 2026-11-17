@@ -1,4 +1,4 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Error</title><link rel="stylesheet" href="/style.css"></head>
-<body><main><h1>Error <%= status %></h1><p class="error"><%= message %></p><p><a href="javascript:history.back()">← Back</a></p></main></body></html>
+<html lang="<%= lang %>"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title><%= t('error.title', { status }) %></title><link rel="stylesheet" href="/style.css"></head>
+<body><main><h1><%= t('error.title', { status }) %></h1><p class="error"><%= message %></p><p><a href="javascript:history.back()"><%= t('error.back') %></a></p></main></body></html>

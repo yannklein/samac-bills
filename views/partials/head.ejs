@@ -1,15 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="<%= lang %>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><%= typeof title !== 'undefined' ? title + ' · ' : '' %>Samac · Bills</title>
+  <title><%= typeof title !== 'undefined' ? title + ' · ' : '' %><%= t('app.title') %></title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header class="top">
-  <a href="/" class="brand">⚡ Samac · Electricity bills</a>
-  <span class="who"><% if (user.isAdmin) { %><a href="/admin">Admin</a> · <% } %><%= user.email %></span>
+  <a href="/" class="brand"><%= t('app.brand') %></a>
+  <span class="who">
+    <% if (user.isAdmin) { %><a href="/admin"><%= t('nav.admin') %></a> · <% } %><%= user.email %>
+    <form method="post" action="/prefs/lang<%= devAs ? '?as=' + encodeURIComponent(devAs) : '' %>" class="lang-switch">
+      <input type="hidden" name="lang" value="<%= lang === 'es' ? 'en' : 'es' %>">
+      <input type="hidden" name="back" value="<%= typeof currentUrl !== 'undefined' ? currentUrl : '/' %>">
+      <button title="<%= t('lang.switchTitle') %>"><%= t('lang.switch') %></button>
+    </form>
+  </span>
 </header>
 <main>
 <% if (typeof msg !== 'undefined' && msg) { %><p class="flash"><%= msg %></p><% } %>

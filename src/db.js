@@ -49,6 +49,12 @@ CREATE TABLE IF NOT EXISTS splits (
   computed_at TEXT NOT NULL DEFAULT (datetime('now')),
   sent_at TEXT
 );
+-- UI language per logged-in user (Cloudflare Access email)
+CREATE TABLE IF NOT EXISTS prefs (
+  email TEXT PRIMARY KEY,
+  lang TEXT NOT NULL CHECK (lang IN ('en','es')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS payments (
   bill_id INTEGER NOT NULL REFERENCES bills(id),
   payer TEXT NOT NULL CHECK (payer IN ('neighbor','marcela')),

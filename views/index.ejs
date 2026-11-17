@@ -1,25 +1,25 @@
-<%- include('partials/head', { title: user.isNeighbor ? 'Your bills' : 'Payments' }) %>
+<%- include('partials/head', { title: user.isNeighbor ? t('list.titleNeighbor') : t('list.title') }) %>
 <div class="row between">
-  <h1><%= user.isNeighbor ? 'Your electricity bills' : 'Payments' %></h1>
-  <% if (user.isAdmin) { %><a class="button" href="/bills/new">+ New bill (manual)</a><% } %>
+  <h1><%= user.isNeighbor ? t('list.titleNeighbor') : t('list.title') %></h1>
+  <% if (user.isAdmin) { %><a class="button" href="/bills/new"><%= t('list.newBill') %></a><% } %>
 </div>
-<% if (user.isNeighbor) { %><p>Hi <%= names.neighbor %> 👋 Here are your shares of the electricity bill our two apartments share. Open a bill to see how it was calculated, with the meter photos and the Endesa bill.</p><% } %>
+<% if (user.isNeighbor) { %><p><%= t('list.hiNeighbor', { name: names.neighbor }) %></p><% } %>
 <% if (!bills.length) { %>
-  <p class="muted">No bills yet.</p>
+  <p class="muted"><%= t('list.empty') %></p>
 <% } else { %>
 <div class="table-wrap">
 <table class="list">
   <thead>
-    <tr><th>Period</th><th class="num">Total</th><th class="num"><%= user.isNeighbor ? 'Your share' : names.neighbor %></th><% if (!user.isNeighbor) { %><th class="num"><%= names.marcela %></th><th class="num"><%= names.yann %> &amp; <%= names.adriana %></th><% } %><th>Status</th></tr>
+    <tr><th><%= t('list.period') %></th><th class="num"><%= t('list.total') %></th><th class="num"><%= user.isNeighbor ? t('list.yourShare') : names.neighbor %></th><% if (!user.isNeighbor) { %><th class="num"><%= names.marcela %></th><th class="num"><%= t('list.yannAdriana', { yann: names.yann, adriana: names.adriana }) %></th><% } %><th><%= t('list.status') %></th></tr>
   </thead>
   <tbody>
   <% for (const b of bills) { const paid = (b.paid_by || '').split(','); %>
     <tr class="clickable <%= b.status === 'superseded' ? 'dim' : '' %>" onclick="location.href='/bills/<%= b.id %>'">
-      <td><a href="/bills/<%= b.id %>"><%= fmtDate(b.period_from) %> – <%= fmtDate(b.period_to) %></a><br><small class="muted"><%= b.invoice_no %><%= b.source === 'manual' ? ' · manual' : '' %></small></td>
+      <td><a href="/bills/<%= b.id %>"><%= fmtDate(b.period_from) %> – <%= fmtDate(b.period_to) %></a><br><small class="muted"><%= b.invoice_no %><%= b.source === 'manual' && !user.isNeighbor ? ' · ' + t('list.manual') : '' %></small></td>
       <td class="num"><%= formatEur(b.total_cents) %></td>
-      <td class="num"><%= b.neighbor_cents != null ? formatEur(b.neighbor_cents) : '—' %><% if (paid.includes('neighbor')) { %> <span class="paid" title="Paid">✓</span><% } %><br><small class="muted"><%= b.neighbor_kwh != null ? fmtKwh(b.neighbor_kwh) : '' %></small></td>
+      <td class="num"><%= b.neighbor_cents != null ? formatEur(b.neighbor_cents) : '—' %><% if (paid.includes('neighbor')) { %> <span class="paid" title="<%= t('list.paid') %>">✓</span><% } %><br><small class="muted"><%= b.neighbor_kwh != null ? fmtKwh(b.neighbor_kwh) : '' %></small></td>
       <% if (!user.isNeighbor) { %>
-      <td class="num"><%= b.marcela_cents != null ? formatEur(b.marcela_cents) : '—' %><% if (paid.includes('marcela')) { %> <span class="paid" title="Paid">✓</span><% } %></td>
+      <td class="num"><%= b.marcela_cents != null ? formatEur(b.marcela_cents) : '—' %><% if (paid.includes('marcela')) { %> <span class="paid" title="<%= t('list.paid') %>">✓</span><% } %></td>
       <td class="num"><%= b.yann_adriana_cents != null ? formatEur(b.yann_adriana_cents) : '—' %></td>
       <% } %>
       <td><span class="badge s-<%= b.status %>"><%= STATUS_TEXT[b.status] %></span></td>

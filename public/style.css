@@ -46,3 +46,6 @@ button.danger, .button.danger { background: var(--err); color: #fff; }
 button.link.danger { background: none; color: var(--err); }
 .box.danger { border-color: #f3c2bd; }
 .who a { color: var(--accent); }
+.who { display:flex; align-items:center; gap:8px; }
+.lang-switch { display:inline; margin:0; }
+.lang-switch button { padding:3px 9px; font-size:12px; background:#eef0f3; color:var(--fg); border:1px solid #d0d5dd; }
