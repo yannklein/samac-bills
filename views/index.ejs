@@ -9,7 +9,7 @@
 <div class="table-wrap">
 <table class="list">
   <thead>
-    <tr><th>Period</th><th class="num">Total</th><th class="num">Neighbor</th><th class="num">Marcela</th><th class="num">Yann &amp; Adriana</th><th>Status</th></tr>
+    <tr><th>Period</th><th class="num">Total</th><th class="num">Neighbor</th><% if (!user.isNeighbor) { %><th class="num">Marcela</th><th class="num">Yann &amp; Adriana</th><% } %><th>Status</th></tr>
   </thead>
   <tbody>
   <% for (const b of bills) { const paid = (b.paid_by || '').split(','); %>
@@ -17,8 +17,10 @@
       <td><a href="/bills/<%= b.id %>"><%= fmtDate(b.period_from) %> – <%= fmtDate(b.period_to) %></a><br><small class="muted"><%= b.invoice_no %><%= b.source === 'manual' ? ' · manual' : '' %></small></td>
       <td class="num"><%= formatEur(b.total_cents) %></td>
       <td class="num"><%= b.neighbor_cents != null ? formatEur(b.neighbor_cents) : '—' %><% if (paid.includes('neighbor')) { %> <span class="paid" title="Paid">✓</span><% } %><br><small class="muted"><%= b.neighbor_kwh != null ? fmtKwh(b.neighbor_kwh) : '' %></small></td>
+      <% if (!user.isNeighbor) { %>
       <td class="num"><%= b.marcela_cents != null ? formatEur(b.marcela_cents) : '—' %><% if (paid.includes('marcela')) { %> <span class="paid" title="Paid">✓</span><% } %></td>
       <td class="num"><%= b.yann_adriana_cents != null ? formatEur(b.yann_adriana_cents) : '—' %></td>
+      <% } %>
       <td><span class="badge s-<%= b.status %>"><%= STATUS_LABELS[b.status] %></span></td>
     </tr>
   <% } %>

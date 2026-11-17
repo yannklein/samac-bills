@@ -164,7 +164,12 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
   web.use(auth.viewer);
   web.use((req, res, next) => {
     // Only Yann + the people registered in the app may view (defence in depth behind Access).
-    const emails = Object.values(svc.people()).map((p) => p.email?.toLowerCase()).filter(Boolean);
+    const ppl = Object.values(svc.people());
+    const emails = ppl.map((p) => p.email?.toLowerCase()).filter(Boolean);
+    const role = ppl.find((p) => p.email?.toLowerCase() === req.user.email)?.role ?? null;
+    // The neighbor only sees their own share, never the split inside our home (Marcela / Yann & Adriana).
+    req.user.isNeighbor = !req.user.isAdmin && role === 'neighbor';
+    req.user.role = req.user.isAdmin ? 'yann' : role;
     if (req.user.isAdmin || !emails.length || emails.includes(req.user.email)) return next();
     res.status(403).send('Your email is not authorized.');
   });

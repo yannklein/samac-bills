@@ -19,10 +19,14 @@
   <div class="card"><div class="label"><%= names.neighbor %> → Yann</div><div class="amount"><%= formatEur(split.neighbor_cents) %></div><div class="muted"><%= fmtKwh(split.neighbor_kwh) %></div>
     <% if (user.isAdmin) { %><form method="post" action="/bills/<%= bill.id %>/paid"><input type="hidden" name="payer" value="neighbor"><button class="link"><%= paid.neighbor ? '✓ Paid' : 'Mark as paid' %></button></form><% } else if (paid.neighbor) { %><div class="paid">✓ Paid</div><% } %>
   </div>
+  <% if (user.isNeighbor) { %>
+  <div class="card"><div class="label">Our apartment (Yann's side)</div><div class="amount"><%= formatEur(split.home_cents) %></div><div class="muted"><%= fmtKwh(split.home_kwh) %></div></div>
+  <% } else { %>
   <div class="card"><div class="label"><%= names.marcela %> → Yann (1/3 of home)</div><div class="amount"><%= formatEur(split.marcela_cents) %></div>
     <% if (user.isAdmin) { %><form method="post" action="/bills/<%= bill.id %>/paid"><input type="hidden" name="payer" value="marcela"><button class="link"><%= paid.marcela ? '✓ Paid' : 'Mark as paid' %></button></form><% } else if (paid.marcela) { %><div class="paid">✓ Paid</div><% } %>
   </div>
   <div class="card"><div class="label">Yann &amp; Adriana (2/3 of home)</div><div class="amount"><%= formatEur(split.yann_adriana_cents) %></div><div class="muted">Home total <%= formatEur(split.home_cents) %> · <%= fmtKwh(split.home_kwh) %></div></div>
+  <% } %>
 </section>
 <p class="muted small"><%= split.sent_at ? 'Sent on WhatsApp on ' + split.sent_at + ' UTC.' : 'Not sent on WhatsApp yet.' %> Calculated on <%= split.computed_at %> UTC.</p>
 

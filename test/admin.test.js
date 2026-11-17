@@ -137,3 +137,40 @@ test('edit page and bill page render admin controls', async () => {
   const asMarcela = await (await fetch(`${base}/bills/${bill.id}?as=marcela@example.com`)).text();
   assert.doesNotMatch(asMarcela, /Delete this bill/);
 });
+
+test('neighbor view: own share and home total only, read-only', async () => {
+  ctx.db.prepare(`INSERT INTO people (role, name, wa_phone, email) VALUES ('neighbor', 'Pepe', NULL, 'pepe@example.com')
+    ON CONFLICT(role) DO UPDATE SET email = excluded.email, wa_phone = NULL`).run();
+  const bill = newBill('NEIGH1', '2027-02-01');
+  ctx.svc.confirm(bill.id, { neighborKwh: 100, source: 'manual', override: true });
+  const d = ctx.svc.billDetail(bill.id).split;
+  const eur = (c) => `€${(c / 100).toFixed(2)}`;
+  const as = '?as=pepe@example.com';
+
+  const page = await (await fetch(`${base}/bills/${bill.id}${as}`)).text();
+  assert.match(page, new RegExp(eur(d.neighbor_cents).replace('.', '\\.')));
+  assert.match(page, /Our apartment/);
+  assert.match(page, /Breakdown/);
+  for (const hidden of [eur(d.marcela_cents), eur(d.yann_adriana_cents), '1/3 of home', '2/3 of home', 'Mark as paid', 'Edit bill', 'Delete this bill']) {
+    assert.ok(!page.includes(hidden), `neighbor page must not contain "${hidden}"`);
+  }
+
+  const list = await (await fetch(`${base}/${as}`)).text();
+  assert.ok(!list.includes('Yann &amp; Adriana'), 'no Yann & Adriana column');
+  assert.ok(!list.includes(eur(d.marcela_cents)), 'no Marcela amounts');
+  assert.ok(!list.includes('New bill'), 'no admin button');
+
+  // Everything that changes data is refused
+  for (const [url, data] of [[`/bills/${bill.id}/paid`, { payer: 'neighbor' }], [`/bills/${bill.id}/reading`, { neighbor_kwh: '1' }],
+    [`/bills/${bill.id}/edit`, {}], [`/bills/${bill.id}/delete`, {}], [`/bills/${bill.id}/mark-sent`, {}], [`/bills/${bill.id}/send`, {}],
+    ['/admin/people', { role: 'neighbor', name: 'x' }], ['/admin/seed', { reading: '1' }]]) {
+    assert.equal((await form(url, data, 'pepe@example.com')).status, 403, url);
+  }
+  for (const url of ['/admin', `/bills/${bill.id}/edit`, '/bills/new', '/admin/backup']) {
+    assert.equal((await fetch(`${base}${url}${as}`)).status, 403, url);
+  }
+
+  // Marcela still sees the full split
+  const marcela = await (await fetch(`${base}/bills/${bill.id}?as=marcela@example.com`)).text();
+  assert.ok(marcela.includes(eur(d.marcela_cents)));
+});
