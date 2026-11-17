@@ -212,6 +212,13 @@ export function makeService({ db, dataDir, publicUrl = '' }) {
             formatEurPlain(split.yann_adriana_cents), `${publicUrl}/bills/${bill.id}`,
           ]
         : null,
+      // What the neighbor gets: their share only, never Marcela / Yann & Adriana.
+      neighbor_vars: split
+        ? [
+            bill.invoice_no, fmtDate(bill.period_from), fmtDate(bill.period_to), formatEurPlain(bill.total_cents),
+            fmtKwh(split.neighbor_kwh), formatEurPlain(split.neighbor_cents), `${publicUrl}/bills/${bill.id}`,
+          ]
+        : null,
     };
   }
 

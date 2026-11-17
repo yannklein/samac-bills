@@ -55,6 +55,7 @@ export function configFromEnv(env = process.env) {
     waPhoneNumberId: env.WA_PHONE_NUMBER_ID || '',
     graphVersion: env.GRAPH_API_VERSION || 'v27.0',
     waTemplateLang: env.WA_TEMPLATE_LANG || 'en',
+    neighborSendsPhoto: env.NEIGHBOR_SENDS_PHOTO === 'true',
     devUserEmail: prod ? '' : env.DEV_USER_EMAIL || '',
   };
 }
@@ -64,7 +65,7 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
   const svc = makeService({ db, dataDir: config.dataDir, publicUrl: config.publicUrl });
   const auth = makeAuth(config);
   const wa = makeWhatsApp({ phoneNumberId: config.waPhoneNumberId, graphVersion: config.graphVersion, lang: config.waTemplateLang });
-  const inbound = makeInbound({ svc, wa, publicUrl: config.publicUrl, endesaNie: config.endesaNie, fetchImpl });
+  const inbound = makeInbound({ svc, wa, publicUrl: config.publicUrl, endesaNie: config.endesaNie, fetchImpl, neighborSendsPhoto: config.neighborSendsPhoto });
   const admin = makeAdmin({ db, svc, dataDir: config.dataDir });
   const app = express();
 

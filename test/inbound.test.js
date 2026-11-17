@@ -46,7 +46,14 @@ test('photo -> buttons -> Sí -> split to all 4, stale tap rejected', () => {
 
   out = inbound.handleWhatsApp({ from: P.neighbor, type: 'button', button_id: btns[0].reply.id });
   assert.equal(out.mark_sent_bill_id, bill.id);
-  assert.deepEqual(types(out).sort(), Object.values(P).map((p) => `${p}:template:samac_split`).sort());
+  assert.deepEqual(types(out).sort(), [
+    `${P.yann}:template:samac_split`, `${P.adriana}:template:samac_split`, `${P.marcela}:template:samac_split`,
+    `${P.neighbor}:template:samac_neighbor_split`,
+  ].sort());
+  // The neighbor's message never contains the internal home split
+  const toNeighbor = out.outbox.find((m) => m.body.to === P.neighbor);
+  assert.equal(textOf(toNeighbor), `P26CON046489044 | 07/10/2026 | 01/11/2026 | 70.48 | 100 | 32.28 | https://bills.example/bills/${bill.id}`);
+  assert.ok(!textOf(toNeighbor).includes('12.73') && !textOf(toNeighbor).includes('25.47'));
   assert.match(textOf(out.outbox[0]), /32\.28 \| 12\.73 \| 25\.47/);
   // Photo is kept as evidence on the confirmed reading
   assert.ok(svc.billDetail(bill.id).readings.find((r) => r.status === 'confirmed').photo_path);
@@ -120,8 +127,10 @@ test('template variables never contain newlines', () => {
   assert.equal(m.body.template.components[0].parameters[0].text, 'a b   c');
 });
 
-test('endesa email -> bill + template to neighbor + notice to Yann; duplicates and non-luz ignored',
+test('endesa email (neighbor sends photo mode) -> bill + template to neighbor + notice to Yann; duplicates and non-luz ignored',
   { skip: !(existsSync(realPdf) && existsSync(realEml)) && 'local fixtures missing' }, async () => {
+    inbound = makeInbound({ svc, wa: makeWhatsApp({ phoneNumberId: '123' }), publicUrl: 'https://bills.example', endesaNie: 'Z0000000T', neighborSendsPhoto: true,
+      fetchImpl: async (url) => (url.startsWith('https://click.') ? new Response('var encDocumento = "D"; var encFactura = "F";') : url.includes('ajax-validacion') ? new Response('https://cdn.endesaclientes.com/f.pdf') : new Response(readFileSync(realPdf))) });
     const raw = readFileSync(realEml, 'utf8');
     const html = raw.slice(raw.indexOf('<'));
     let out = await inbound.handleEndesaEmail({ html });
@@ -135,13 +144,21 @@ test('endesa email -> bill + template to neighbor + notice to Yann; duplicates a
     assert.equal(out.action, 'ignored_not_luz');
   });
 
+test('default: neighbor has a number but Yann takes the photo -> only Yann is notified',
+  { skip: !(existsSync(realPdf) && existsSync(realEml)) && 'local fixtures missing' }, async () => {
+    const raw = readFileSync(realEml, 'utf8');
+    const out = await inbound.handleEndesaEmail({ html: raw.slice(raw.indexOf('<')) });
+    assert.deepEqual(types(out), [`${P.yann}:template:samac_notice`]);
+    assert.match(textOf(out.outbox[0]), /take a photo of the neighbor's meter/);
+  });
+
 test('without a neighbor: Yann gets the request, relays the photo, split goes to 3 people',
   { skip: !(existsSync(realPdf) && existsSync(realEml)) && 'local fixtures missing' }, async () => {
     db.prepare(`DELETE FROM people WHERE role = 'neighbor'`).run();
     const raw = readFileSync(realEml, 'utf8');
     let out = await inbound.handleEndesaEmail({ html: raw.slice(raw.indexOf('<')) });
     assert.deepEqual(types(out), [`${P.yann}:template:samac_notice`]);
-    assert.match(textOf(out.outbox[0]), /no neighbor number set/);
+    assert.match(textOf(out.outbox[0]), /take a photo of the neighbor's meter/);
     out = inbound.handleWhatsApp({ from: P.yann, type: 'image', reading: 12445, photoBuffer: Buffer.from('jpg') });
     out = inbound.handleWhatsApp({ from: P.yann, type: 'button', button_id: out.outbox[0].body.interactive.action.buttons[0].reply.id });
     assert.equal(out.action, 'split_sent');

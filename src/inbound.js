@@ -12,7 +12,7 @@ import { formatEur } from './money.js';
 const fmtDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
 const HELP = 'Commands: "reading 12345" (neighbor meter reading), "kwh 100" (neighbor kWh directly), "status".';
 
-export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }) {
+export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch, neighborSendsPhoto = false }) {
   const people = () => svc.people();
 
   /** Message to Yann: free text if he just wrote (24h window open), else the notice template. */
@@ -24,7 +24,9 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
 
   function splitOutbox(billId) {
     const m = svc.message(billId);
-    return m.recipients.map((r) => wa.template(r.wa_phone, TEMPLATES.split, m.split_vars));
+    return m.recipients.map((r) => (r.role === 'neighbor'
+      ? wa.template(r.wa_phone, TEMPLATES.neighborSplit, m.neighbor_vars)
+      : wa.template(r.wa_phone, TEMPLATES.split, m.split_vars)));
   }
 
   function summary(billId) {
@@ -181,11 +183,12 @@ export function makeInbound({ svc, wa, publicUrl, endesaNie, fetchImpl = fetch }
       const { bill, superseded } = svc.createBill({ parsed, pdfBuffer: pdf, source: 'auto' });
       const m = svc.message(bill.id);
       const outbox = [];
-      if (m.neighbor?.wa_phone) outbox.push(wa.template(m.neighbor.wa_phone, TEMPLATES.requestReading, m.request_vars));
+      const askNeighbor = neighborSendsPhoto && m.neighbor?.wa_phone;
+      if (askNeighbor) outbox.push(wa.template(m.neighbor.wa_phone, TEMPLATES.requestReading, m.request_vars));
       const extra = superseded.length ? ` Bill ${superseded.map((b) => b.invoice_no).join(', ')} never got a reading and was replaced.` : '';
-      const ask = m.neighbor?.wa_phone
+      const ask = askNeighbor
         ? 'asked the neighbor for the meter photo.'
-        : 'no neighbor number set: send me their meter photo or reply with the reading.';
+        : 'take a photo of the neighbor\'s meter and send it here (or reply with the reading).';
       outbox.push(...toYann(`New electricity bill ${bill.invoice_no} (${formatEur(bill.total_cents)}), ${ask}${extra} ${m.url}`));
       return { outbox, bill_id: bill.id, action: 'bill_created', ...noYannWarning() };
     } catch (e) {

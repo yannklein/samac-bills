@@ -43,4 +43,5 @@ export const TEMPLATES = {
   requestReading: 'samac_request_reading', // {{1}} name, {{2}} from, {{3}} to
   split: 'samac_split', // 9 vars, see service.message().split_vars
   notice: 'samac_notice', // {{1}} free text
+  neighborSplit: 'samac_neighbor_split', // 7 vars, see service.message().neighbor_vars (no internal home split)
 };

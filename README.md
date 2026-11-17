@@ -101,6 +101,19 @@ no header/footer/buttons. Names must match exactly.
 `samac_split` (samples: P26CON046489044 · 07/10/2026 · 01/11/2026 · 70.48 · 100 · 32.28 · 12.73 · 25.47 · https://samac-bills.yannklein.dev/bills/1)
 > Electricity bill {{1}}, from {{2}} to {{3}}, total €{{4}}. The neighbor used {{5}} kWh and pays €{{6}} to Yann. Marcela pays €{{7}} to Yann (1/3 of home). Yann and Adriana pay €{{8}} (2/3 of home). Breakdown and evidence: {{9}} . Thanks!
 
+`samac_neighbor_split`: sent to the neighbor instead of `samac_split`, without the internal home split
+(samples: P26CON046489044 · 07/10/2026 · 01/11/2026 · 70.48 · 100 · 32.28 · https://samac-bills.yannklein.dev/bills/1)
+> ⚡️ Electricity bill {{1}}
+>
+> 📆 From {{2}} to {{3}}
+> 💸 Total €{{4}}.
+>
+> You used {{5}} kWh and pay €{{6}} to Yann.
+>
+> Details on: {{7}}
+>
+> Thanks!
+
 `samac_notice` (sample: New electricity bill received)
 > Samac bills notice: {{1}}. Check the app if needed.
 
