@@ -227,3 +227,45 @@ test('Spanish: browser default, saved per user with the switch, David sees his p
   const privacy = await (await fetch(`${base}/privacy?lang=es`)).text();
   assert.match(privacy, /Borrado de datos/);
 });
+
+test('Yann can preview the neighbor view (same page, David\'s language, no admin controls)', async () => {
+  ctx.db.prepare(`INSERT INTO people (role, name, wa_phone, email) VALUES ('neighbor', 'David', NULL, 'david@example.com')
+    ON CONFLICT(role) DO UPDATE SET name = 'David', email = 'david@example.com'`).run();
+  ctx.db.prepare(`DELETE FROM prefs`).run();
+  ctx.db.prepare(`INSERT INTO prefs (email, lang) VALUES ('david@example.com', 'es'), ('yann@example.com', 'en')`).run();
+  const bill = newBill('PREV1', '2027-04-01');
+  ctx.svc.confirm(bill.id, { neighborKwh: 100, source: 'manual', override: true });
+  const d = ctx.svc.billDetail(bill.id).split;
+  const strip = (h) => h.replace(/<header[\s\S]*?<\/header>/, '').replace(/<div class="preview-banner">[\s\S]*?<\/div>/, '').replace(/\n\s*(?=\n)/g, '');
+
+  // Entry point on Yann's own page
+  const own = await (await fetch(`${base}/bills/${bill.id}`)).text();
+  assert.match(own, new RegExp(`href="/bills/${bill.id}\\?view=neighbor"`));
+  assert.match(own, /See as David/);
+
+  // The preview body is identical to what David himself gets
+  const preview = await (await fetch(`${base}/bills/${bill.id}?view=neighbor`)).text();
+  const asDavid = await (await fetch(`${base}/bills/${bill.id}?as=david@example.com`)).text();
+  assert.match(preview, /Vista previa: esto es exactamente lo que ve David/);
+  assert.equal(strip(preview).replace(/\?view=neighbor/g, ''), strip(asDavid));
+  for (const hidden of ['12,73 €', '25,47 €', 'Marcar como pagado', 'Editar', 'Borrar', 'href="/admin"']) {
+    assert.ok(!preview.includes(hidden), `preview must not contain "${hidden}"`);
+  }
+  assert.ok(preview.includes('href="/?view=neighbor"'), 'back link stays in preview');
+
+  // Language override inside the preview does not touch anyone's saved preference
+  const en = await (await fetch(`${base}/bills/${bill.id}?view=neighbor&lang=en`)).text();
+  assert.match(en, /You pay Yann/);
+  assert.deepEqual(ctx.db.prepare('SELECT email, lang FROM prefs ORDER BY email').all(),
+    [{ email: 'david@example.com', lang: 'es' }, { email: 'yann@example.com', lang: 'en' }]);
+
+  // List preview
+  const list = await (await fetch(`${base}/?view=neighbor`)).text();
+  assert.match(list, /Tus facturas de luz/);
+  assert.ok(list.includes(`/bills/${bill.id}?view=neighbor`));
+
+  // Only Yann can use it: for Marcela the parameter is ignored (her normal full view)
+  const marcela = await (await fetch(`${base}/bills/${bill.id}?view=neighbor&as=marcela@example.com`)).text();
+  assert.doesNotMatch(marcela, /preview-banner/);
+  assert.ok(marcela.includes('12.73') || marcela.includes('12,73'), 'Marcela still sees her full split');
+});

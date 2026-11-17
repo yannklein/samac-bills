@@ -191,6 +191,11 @@ const en = {
   'msg.sent': 'Sent on WhatsApp.',
   'msg.n8nFailed': 'n8n answered {status}: nothing was sent.',
 
+  'preview.banner': '👁 Preview: this is exactly what {name} sees.',
+  'preview.language': 'Language:',
+  'preview.exit': 'Exit preview',
+  'preview.seeAs': '👁 See as {name}',
+  'preview.seeListAs': '👁 See the list as {name}',
   'error.title': 'Error {status}',
   'error.back': '← Back',
 };
@@ -383,6 +388,11 @@ const es = {
   'msg.sent': 'Enviada por WhatsApp.',
   'msg.n8nFailed': 'n8n respondió {status}: no se ha enviado nada.',
 
+  'preview.banner': '👁 Vista previa: esto es exactamente lo que ve {name}.',
+  'preview.language': 'Idioma:',
+  'preview.exit': 'Salir de la vista previa',
+  'preview.seeAs': '👁 Ver como {name}',
+  'preview.seeListAs': '👁 Ver la lista como {name}',
   'error.title': 'Error {status}',
   'error.back': '← Volver',
 };

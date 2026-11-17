@@ -194,8 +194,17 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
       neighbor: nameOf.neighbor || 'Neighbor', marcela: nameOf.marcela || 'Marcela',
       adriana: nameOf.adriana || 'Adriana', yann: nameOf.yann || 'Yann',
     };
-    // Language: the user's saved choice, else the browser's
-    const saved = db.prepare('SELECT lang FROM prefs WHERE email = ?').get(req.user.email)?.lang;
+    // Admin preview: GET pages rendered exactly as the neighbor sees them (?view=neighbor)
+    const preview = req.user.isAdmin && req.query.view === 'neighbor' && req.method === 'GET';
+    const viewer = preview ? { ...req.user, isAdmin: false, isNeighbor: true, preview: true } : req.user;
+    res.locals.user = viewer;
+    res.locals.previewQs = preview ? '?view=neighbor' : '';
+    // Language: the user's saved choice, else the browser's. In preview: the neighbor's choice (or ?lang=).
+    const savedLang = (email) => (email ? db.prepare('SELECT lang FROM prefs WHERE email = ?').get(email)?.lang : null);
+    const neighborEmail = ppl.find((p) => p.role === 'neighbor')?.email?.toLowerCase();
+    const saved = preview
+      ? (LANGS.includes(req.query.lang) ? req.query.lang : savedLang(neighborEmail) ?? savedLang(req.user.email))
+      : savedLang(req.user.email);
     setLanguage(req, res, pickLang(saved, req.get('accept-language')));
     const t = req.t;
     res.locals.currentUrl = req.originalUrl;
@@ -205,7 +214,7 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
     names.home = `${names.marcela}, ${names.adriana} ${req.lang === 'es' ? 'y' : 'and'} ${names.yann}`;
     res.locals.names = names;
     res.locals.STATUS_TEXT = Object.fromEntries(Object.keys(STATUS_LABELS).map((s) => [
-      s, req.user.isNeighbor ? t(`nstatus.${s}`) : t(`status.${s}`, { neighbor: names.neighbor }),
+      s, viewer.isNeighbor ? t(`nstatus.${s}`) : t(`status.${s}`, { neighbor: names.neighbor }),
     ]));
     if (req.user.isAdmin || !emails.length || emails.includes(req.user.email)) return next();
     res.status(403).send('Your email is not authorized.');

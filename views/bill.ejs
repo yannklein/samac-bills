@@ -9,7 +9,7 @@
   const v = { name: names.neighbor, yann: names.yann, adriana: names.adriana, marcela: names.marcela, neighbor: names.neighbor };
   const reading = (r) => fmtNum(r);
 %>
-<p><a href="/"><%= me ? t('bill.backYours') : t('bill.backPayments') %></a></p>
+<p class="row between"><a href="/<%= previewQs %>"><%= me ? t('bill.backYours') : t('bill.backPayments') %></a><% if (user.isAdmin) { %><a class="button secondary" href="/bills/<%= bill.id %>?view=neighbor"><%= t('preview.seeAs', { name: names.neighbor }) %></a><% } %></p>
 <div class="row between">
   <h1><%= t('bill.title', { from: fmtDate(bill.period_from), to: fmtDate(bill.period_to) }) %></h1>
   <span class="badge s-<%= bill.status %>"><%= STATUS_TEXT[bill.status] %></span>

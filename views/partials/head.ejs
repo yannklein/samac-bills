@@ -11,12 +11,23 @@
   <a href="/" class="brand"><%= t('app.brand') %></a>
   <span class="who">
     <% if (user.isAdmin) { %><a href="/admin"><%= t('nav.admin') %></a> · <% } %><%= user.email %>
+    <% if (user.preview) { %>
+    <a class="lang-link" href="?view=neighbor&lang=<%= lang === 'es' ? 'en' : 'es' %>" title="<%= t('lang.switchTitle') %>"><%= t('lang.switch') %></a>
+    <% } else { %>
     <form method="post" action="/prefs/lang<%= devAs ? '?as=' + encodeURIComponent(devAs) : '' %>" class="lang-switch">
       <input type="hidden" name="lang" value="<%= lang === 'es' ? 'en' : 'es' %>">
       <input type="hidden" name="back" value="<%= typeof currentUrl !== 'undefined' ? currentUrl : '/' %>">
       <button title="<%= t('lang.switchTitle') %>"><%= t('lang.switch') %></button>
     </form>
+    <% } %>
   </span>
 </header>
+<% if (user.preview) { %>
+<div class="preview-banner">
+  <%= t('preview.banner', { name: names.neighbor }) %>
+  <span><%= t('preview.language') %> <a href="?view=neighbor&lang=en">English</a> · <a href="?view=neighbor&lang=es">Español</a> ·
+  <a href="<%= currentUrl.split('?')[0] %>"><strong><%= t('preview.exit') %></strong></a></span>
+</div>
+<% } %>
 <main>
 <% if (typeof msg !== 'undefined' && msg) { %><p class="flash"><%= msg %></p><% } %>

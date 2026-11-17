@@ -1,7 +1,7 @@
 <%- include('partials/head', { title: user.isNeighbor ? t('list.titleNeighbor') : t('list.title') }) %>
 <div class="row between">
   <h1><%= user.isNeighbor ? t('list.titleNeighbor') : t('list.title') %></h1>
-  <% if (user.isAdmin) { %><a class="button" href="/bills/new"><%= t('list.newBill') %></a><% } %>
+  <% if (user.isAdmin) { %><span class="row"><a class="button secondary" href="/?view=neighbor"><%= t('preview.seeListAs', { name: names.neighbor }) %></a><a class="button" href="/bills/new"><%= t('list.newBill') %></a></span><% } %>
 </div>
 <% if (user.isNeighbor) { %><p><%= t('list.hiNeighbor', { name: names.neighbor }) %></p><% } %>
 <% if (!bills.length) { %>
@@ -14,8 +14,8 @@
   </thead>
   <tbody>
   <% for (const b of bills) { const paid = (b.paid_by || '').split(','); %>
-    <tr class="clickable <%= b.status === 'superseded' ? 'dim' : '' %>" onclick="location.href='/bills/<%= b.id %>'">
-      <td><a href="/bills/<%= b.id %>"><%= fmtDate(b.period_from) %> – <%= fmtDate(b.period_to) %></a><br><small class="muted"><%= b.invoice_no %><%= b.source === 'manual' && !user.isNeighbor ? ' · ' + t('list.manual') : '' %></small></td>
+    <tr class="clickable <%= b.status === 'superseded' ? 'dim' : '' %>" onclick="location.href='/bills/<%= b.id %><%= previewQs %>'">
+      <td><a href="/bills/<%= b.id %><%= previewQs %>"><%= fmtDate(b.period_from) %> – <%= fmtDate(b.period_to) %></a><br><small class="muted"><%= b.invoice_no %><%= b.source === 'manual' && !user.isNeighbor ? ' · ' + t('list.manual') : '' %></small></td>
       <td class="num"><%= formatEur(b.total_cents) %></td>
       <td class="num"><%= b.neighbor_cents != null ? formatEur(b.neighbor_cents) : '—' %><% if (paid.includes('neighbor')) { %> <span class="paid" title="<%= t('list.paid') %>">✓</span><% } %><br><small class="muted"><%= b.neighbor_kwh != null ? fmtKwh(b.neighbor_kwh) : '' %></small></td>
       <% if (!user.isNeighbor) { %>
