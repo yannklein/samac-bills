@@ -4,36 +4,63 @@
   const candidate = readings.find((r) => r.status === 'candidate');
   const bd = split?.breakdown;
   const paid = Object.fromEntries(payments.map((p) => [p.payer, p]));
-  const names = { neighbor: people.neighbor?.name || 'Neighbor', marcela: people.marcela?.name || 'Marcela' };
   const pct = (x) => (x * 100).toFixed(1);
+  const me = user.isNeighbor; // David's own view: his share only, never the split inside the other apartment
+  const t = me ? {
+    back: '← Your bills',
+    meCol: 'You',
+    homeCol: names.home,
+    readings: 'Your meter readings',
+    meterNow: 'Your meter (this bill)',
+    meterPrev: 'Your meter (previous bill)',
+    kwhShare: 'yours',
+    roundTo: `${names.home}'s side`,
+    waiting: 'Not calculated yet: waiting for the reading of your meter.',
+  } : {
+    back: '← Payments',
+    meCol: names.neighbor,
+    homeCol: 'Home',
+    readings: `${names.neighbor}'s meter readings`,
+    meterNow: `${names.neighbor}'s meter (current)`,
+    meterPrev: `${names.neighbor}'s meter (previous)`,
+    kwhShare: names.neighbor,
+    roundTo: 'the home side',
+    waiting: `No split yet: waiting for ${names.neighbor}'s meter reading.`,
+  };
 %>
-<p><a href="/">← Payments</a></p>
+<p><a href="/"><%= t.back %></a></p>
 <div class="row between">
   <h1>Electricity <%= fmtDate(bill.period_from) %> – <%= fmtDate(bill.period_to) %></h1>
-  <span class="badge s-<%= bill.status %>"><%= STATUS_LABELS[bill.status] %></span>
+  <span class="badge s-<%= bill.status %>"><%= STATUS_TEXT[bill.status] %></span>
 </div>
-<p class="muted">Bill <%= bill.invoice_no %> · issued <%= fmtDate(bill.issued_at) %> · <%= bill.days %> days · <%= fmtKwh(bill.kwh_total) %> · <%= bill.source === 'manual' ? 'created by hand' : 'automatic' %><%= bill.status_note ? ' · ' + bill.status_note : '' %></p>
+<% if (me) { %>
+<p>Hi <%= names.neighbor %> 👋 Here is your share of the electricity bill our two apartments share, with the details of how it was calculated.</p>
+<% } %>
+<p class="muted">Endesa bill <%= bill.invoice_no %> · issued <%= fmtDate(bill.issued_at) %> · <%= bill.days %> days · <%= fmtKwh(bill.kwh_total) %> in total<% if (!me) { %> · <%= bill.source === 'manual' ? 'created by hand' : 'automatic' %><%= bill.status_note ? ' · ' + bill.status_note : '' %><% } %></p>
 
 <% if (split) { %>
 <section class="cards">
-  <div class="card"><div class="label"><%= names.neighbor %> → Yann</div><div class="amount"><%= formatEur(split.neighbor_cents) %></div><div class="muted"><%= fmtKwh(split.neighbor_kwh) %></div>
+  <% if (me) { %>
+  <div class="card"><div class="label">You pay <%= names.yann %></div><div class="amount"><%= formatEur(split.neighbor_cents) %></div><div class="muted">for <%= fmtKwh(split.neighbor_kwh) %></div>
+    <% if (paid.neighbor) { %><div class="paid">✓ Paid, thank you!</div><% } %>
+  </div>
+  <div class="card"><div class="label"><%= names.home %>'s apartment</div><div class="amount"><%= formatEur(split.home_cents) %></div><div class="muted">for <%= fmtKwh(split.home_kwh) %></div></div>
+  <% } else { %>
+  <div class="card"><div class="label"><%= names.neighbor %> → <%= names.yann %></div><div class="amount"><%= formatEur(split.neighbor_cents) %></div><div class="muted"><%= fmtKwh(split.neighbor_kwh) %></div>
     <% if (user.isAdmin) { %><form method="post" action="/bills/<%= bill.id %>/paid"><input type="hidden" name="payer" value="neighbor"><button class="link"><%= paid.neighbor ? '✓ Paid' : 'Mark as paid' %></button></form><% } else if (paid.neighbor) { %><div class="paid">✓ Paid</div><% } %>
   </div>
-  <% if (user.isNeighbor) { %>
-  <div class="card"><div class="label">Our apartment (Yann's side)</div><div class="amount"><%= formatEur(split.home_cents) %></div><div class="muted"><%= fmtKwh(split.home_kwh) %></div></div>
-  <% } else { %>
-  <div class="card"><div class="label"><%= names.marcela %> → Yann (1/3 of home)</div><div class="amount"><%= formatEur(split.marcela_cents) %></div>
+  <div class="card"><div class="label"><%= names.marcela %> → <%= names.yann %> (1/3 of home)</div><div class="amount"><%= formatEur(split.marcela_cents) %></div>
     <% if (user.isAdmin) { %><form method="post" action="/bills/<%= bill.id %>/paid"><input type="hidden" name="payer" value="marcela"><button class="link"><%= paid.marcela ? '✓ Paid' : 'Mark as paid' %></button></form><% } else if (paid.marcela) { %><div class="paid">✓ Paid</div><% } %>
   </div>
-  <div class="card"><div class="label">Yann &amp; Adriana (2/3 of home)</div><div class="amount"><%= formatEur(split.yann_adriana_cents) %></div><div class="muted">Home total <%= formatEur(split.home_cents) %> · <%= fmtKwh(split.home_kwh) %></div></div>
+  <div class="card"><div class="label"><%= names.yann %> &amp; <%= names.adriana %> (2/3 of home)</div><div class="amount"><%= formatEur(split.yann_adriana_cents) %></div><div class="muted">Home total <%= formatEur(split.home_cents) %> · <%= fmtKwh(split.home_kwh) %></div></div>
   <% } %>
 </section>
-<p class="muted small"><%= split.sent_at ? 'Sent on WhatsApp on ' + split.sent_at + ' UTC.' : 'Not sent on WhatsApp yet.' %> Calculated on <%= split.computed_at %> UTC.</p>
+<% if (!me) { %><p class="muted small"><%= split.sent_at ? 'Sent on WhatsApp on ' + split.sent_at + ' UTC.' : 'Not sent on WhatsApp yet.' %> Calculated on <%= split.computed_at %> UTC.</p><% } %>
 
-<h2>Breakdown</h2>
+<h2><%= me ? 'How your share was calculated' : 'Breakdown' %></h2>
 <div class="table-wrap">
 <table class="breakdown">
-  <thead><tr><th>Bill line</th><th>Split</th><th class="num">Bill</th><th class="num"><%= names.neighbor %></th><th class="num">Home</th></tr></thead>
+  <thead><tr><th>Bill line</th><th>Split</th><th class="num">Bill</th><th class="num"><%= t.meCol %></th><th class="num"><%= t.homeCol %></th></tr></thead>
   <tbody>
     <% for (const l of bd.lines.filter((l) => l.kind !== 'tax')) { %>
       <tr><td><%= l.label %></td><td class="muted"><%= KIND_LABELS[l.kind] %></td><td class="num"><%= formatEur(l.amountCents) %></td><td class="num"><%= formatEur(l.neighborCents) %></td><td class="num"><%= formatEur(l.homeCents) %></td></tr>
@@ -46,12 +73,12 @@
   </tbody>
 </table>
 </div>
-<p class="muted small">Fixed costs split 50/50 · variable costs by kWh (<%= pct(bd.kwhShare) %>% neighbor) · taxes by the ratio of each side's subtotal · rounding goes to the home side so the total matches the bill. Line labels are as printed on the Endesa bill.</p>
+<p class="muted small">Fixed costs split 50/50 · variable costs by kWh (<%= pct(bd.kwhShare) %>% <%= t.kwhShare %>) · taxes by the ratio of each side's subtotal · rounding goes to <%= t.roundTo %> so the total matches the bill. Line labels are as printed on the Endesa bill.</p>
 <% } else { %>
-  <p class="callout">No split yet: waiting for the neighbor's meter reading.<% if (candidate && candidate.reading_kwh != null) { %> Latest proposed reading: <strong><%= candidate.reading_kwh %></strong> (not confirmed yet).<% } %></p>
+  <p class="callout"><%= t.waiting %><% if (!me && candidate && candidate.reading_kwh != null) { %> Latest proposed reading: <strong><%= candidate.reading_kwh %></strong> (not confirmed yet).<% } %></p>
 <% } %>
 
-<h2>Neighbor meter readings</h2>
+<h2><%= t.readings %></h2>
 <p>
   Previous: <strong><%= previous ? previous.reading_kwh : '—' %></strong>
   → Current: <strong><%= confirmed ? confirmed.reading_kwh : (split?.reading_kwh ?? '—') %></strong>
@@ -61,16 +88,16 @@
 <h2>Evidence</h2>
 <div class="evidence">
   <div>
-    <h3>Bill</h3>
+    <h3>Endesa bill</h3>
     <% if (bill.pdf_path) { %><a class="button secondary" href="/files/<%= bill.pdf_path %>" target="_blank">📄 Open PDF</a><% } else { %><span class="muted">No PDF</span><% } %>
   </div>
   <div>
-    <h3>Neighbor meter (current)</h3>
+    <h3><%= t.meterNow %></h3>
     <% const photo = confirmed?.photo_path || candidate?.photo_path; %>
     <% if (photo) { %><a href="/files/<%= photo %>" target="_blank"><img src="/files/<%= photo %>" alt="Current meter"></a><% } else { %><span class="muted">No photo</span><% } %>
   </div>
   <div>
-    <h3>Neighbor meter (previous)</h3>
+    <h3><%= t.meterPrev %></h3>
     <% if (previous?.photo_path) { %><a href="/files/<%= previous.photo_path %>" target="_blank"><img src="/files/<%= previous.photo_path %>" alt="Previous meter"></a><% } else { %><span class="muted"><%= previous ? 'Reading ' + previous.reading_kwh + ' (no photo)' : 'No reading' %></span><% } %>
   </div>
 </div>
@@ -80,15 +107,15 @@
 <div class="admin">
   <form method="post" action="/bills/<%= bill.id %>/reading" enctype="multipart/form-data" class="box">
     <h3><%= split ? 'Fix the reading and recalculate' : 'Enter the reading' %></h3>
-    <label>Neighbor meter reading <input name="reading" inputmode="decimal" placeholder="<%= previous ? 'previous: ' + previous.reading_kwh : '' %>"></label>
-    <label>…or neighbor kWh directly <input name="neighbor_kwh" inputmode="decimal"></label>
+    <label><%= names.neighbor %>'s meter reading <input name="reading" inputmode="decimal" placeholder="<%= previous ? 'previous: ' + previous.reading_kwh : '' %>"></label>
+    <label>…or <%= names.neighbor %>'s kWh directly <input name="neighbor_kwh" inputmode="decimal"></label>
     <label>Photo (optional) <input type="file" name="photo" accept="image/*"></label>
     <button>Calculate</button>
   </form>
   <% if (split) { %>
-  <form method="post" action="/bills/<%= bill.id %>/send" class="box" onsubmit="return confirm('Send the split on WhatsApp to all 4?')">
+  <form method="post" action="/bills/<%= bill.id %>/send" class="box" onsubmit="return confirm('Send the split on WhatsApp?')">
     <h3>WhatsApp</h3>
-    <p class="muted small">Sends the split message to Yann, Adriana, Marcela and the neighbor.</p>
+    <p class="muted small">Sends the full split to <%= names.yann %>, <%= names.adriana %> and <%= names.marcela %>, and <%= names.neighbor %>'s own share to <%= names.neighbor %> (if they have a WhatsApp number).</p>
     <button <%= n8nConfigured ? '' : 'disabled' %>>Send on WhatsApp</button>
     <% if (!n8nConfigured) { %><p class="muted small">N8N_SEND_WEBHOOK_URL is not configured.</p><% } %>
   </form>

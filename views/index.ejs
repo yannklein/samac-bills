@@ -1,15 +1,16 @@
-<%- include('partials/head', { title: 'Payments' }) %>
+<%- include('partials/head', { title: user.isNeighbor ? 'Your bills' : 'Payments' }) %>
 <div class="row between">
-  <h1>Payments</h1>
+  <h1><%= user.isNeighbor ? 'Your electricity bills' : 'Payments' %></h1>
   <% if (user.isAdmin) { %><a class="button" href="/bills/new">+ New bill (manual)</a><% } %>
 </div>
+<% if (user.isNeighbor) { %><p>Hi <%= names.neighbor %> 👋 Here are your shares of the electricity bill our two apartments share. Open a bill to see how it was calculated, with the meter photos and the Endesa bill.</p><% } %>
 <% if (!bills.length) { %>
   <p class="muted">No bills yet.</p>
 <% } else { %>
 <div class="table-wrap">
 <table class="list">
   <thead>
-    <tr><th>Period</th><th class="num">Total</th><th class="num">Neighbor</th><% if (!user.isNeighbor) { %><th class="num">Marcela</th><th class="num">Yann &amp; Adriana</th><% } %><th>Status</th></tr>
+    <tr><th>Period</th><th class="num">Total</th><th class="num"><%= user.isNeighbor ? 'Your share' : names.neighbor %></th><% if (!user.isNeighbor) { %><th class="num"><%= names.marcela %></th><th class="num"><%= names.yann %> &amp; <%= names.adriana %></th><% } %><th>Status</th></tr>
   </thead>
   <tbody>
   <% for (const b of bills) { const paid = (b.paid_by || '').split(','); %>
@@ -21,7 +22,7 @@
       <td class="num"><%= b.marcela_cents != null ? formatEur(b.marcela_cents) : '—' %><% if (paid.includes('marcela')) { %> <span class="paid" title="Paid">✓</span><% } %></td>
       <td class="num"><%= b.yann_adriana_cents != null ? formatEur(b.yann_adriana_cents) : '—' %></td>
       <% } %>
-      <td><span class="badge s-<%= b.status %>"><%= STATUS_LABELS[b.status] %></span></td>
+      <td><span class="badge s-<%= b.status %>"><%= STATUS_TEXT[b.status] %></span></td>
     </tr>
   <% } %>
   </tbody>

@@ -25,6 +25,15 @@ const STATUS_LABELS = {
   superseded: 'Replaced',
   error: 'Error',
 };
+// Same statuses, worded for the neighbor
+const NEIGHBOR_STATUS_LABELS = {
+  awaiting_reading: 'Waiting for your meter reading',
+  awaiting_confirmation: 'Checking your meter reading',
+  ready: 'Calculated',
+  sent: 'Sent to you',
+  superseded: 'Replaced',
+  error: 'Error',
+};
 
 const imageExt = (mime = '') => ({ 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic' }[mime] ?? 'jpg');
 const num = (v) => {
@@ -171,6 +180,14 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
     // The neighbor only sees their own share, never the split inside our home (Marcela / Yann & Adriana).
     req.user.isNeighbor = !req.user.isAdmin && role === 'neighbor';
     req.user.role = req.user.isAdmin ? 'yann' : role;
+    const nameOf = Object.fromEntries(ppl.map((p) => [p.role, p.name]));
+    const names = {
+      neighbor: nameOf.neighbor || 'Neighbor', marcela: nameOf.marcela || 'Marcela',
+      adriana: nameOf.adriana || 'Adriana', yann: nameOf.yann || 'Yann',
+    };
+    names.home = `${names.marcela}, ${names.adriana} and ${names.yann}`;
+    res.locals.names = names;
+    res.locals.STATUS_TEXT = req.user.isNeighbor ? NEIGHBOR_STATUS_LABELS : STATUS_LABELS;
     if (req.user.isAdmin || !emails.length || emails.includes(req.user.email)) return next();
     res.status(403).send('Your email is not authorized.');
   });

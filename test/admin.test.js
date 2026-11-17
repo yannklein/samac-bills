@@ -149,8 +149,12 @@ test('neighbor view: own share and home total only, read-only', async () => {
 
   const page = await (await fetch(`${base}/bills/${bill.id}${as}`)).text();
   assert.match(page, new RegExp(eur(d.neighbor_cents).replace('.', '\\.')));
-  assert.match(page, /Our apartment/);
-  assert.match(page, /Breakdown/);
+  assert.match(page, /Hi Pepe/);
+  assert.match(page, /You pay Yann/);
+  assert.match(page, /Marcela, Adriana and Yann(&#39;|')s apartment/);
+  assert.match(page, /How your share was calculated/);
+  assert.match(page, /Your meter readings/);
+  assert.doesNotMatch(page, /Neighbor/, 'no generic "Neighbor" wording on David\'s own page');
   for (const hidden of [eur(d.marcela_cents), eur(d.yann_adriana_cents), '1/3 of home', '2/3 of home', 'Mark as paid', 'Edit bill', 'Delete this bill']) {
     assert.ok(!page.includes(hidden), `neighbor page must not contain "${hidden}"`);
   }
@@ -159,6 +163,8 @@ test('neighbor view: own share and home total only, read-only', async () => {
   assert.ok(!list.includes('Yann &amp; Adriana'), 'no Yann & Adriana column');
   assert.ok(!list.includes(eur(d.marcela_cents)), 'no Marcela amounts');
   assert.ok(!list.includes('New bill'), 'no admin button');
+  assert.match(list, /Your electricity bills/);
+  assert.match(list, /Your share/);
 
   // Everything that changes data is refused
   for (const [url, data] of [[`/bills/${bill.id}/paid`, { payer: 'neighbor' }], [`/bills/${bill.id}/reading`, { neighbor_kwh: '1' }],
