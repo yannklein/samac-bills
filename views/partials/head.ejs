@@ -9,7 +9,7 @@
 <body>
 <header class="top">
   <a href="/" class="brand">⚡ Samac · Electricity bills</a>
-  <span class="who"><%= user.email %><%= user.isAdmin ? ' · admin' : '' %></span>
+  <span class="who"><% if (user.isAdmin) { %><a href="/admin">Admin</a> · <% } %><%= user.email %></span>
 </header>
 <main>
 <% if (typeof msg !== 'undefined' && msg) { %><p class="flash"><%= msg %></p><% } %>

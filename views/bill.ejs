@@ -89,6 +89,18 @@
     <% if (!n8nConfigured) { %><p class="muted small">N8N_SEND_WEBHOOK_URL is not configured.</p><% } %>
   </form>
   <% } %>
+  <div class="box">
+    <h3>Bill</h3>
+    <p><a class="button secondary" href="/bills/<%= bill.id %>/edit">✎ Edit bill details and lines</a></p>
+    <% if (split && bill.status !== 'sent') { %>
+    <form method="post" action="/bills/<%= bill.id %>/mark-sent" onsubmit="return confirm('Mark as sent without sending anything on WhatsApp?')">
+      <button class="link">Mark as sent (I told everyone myself)</button>
+    </form>
+    <% } %>
+    <form method="post" action="/bills/<%= bill.id %>/delete" onsubmit="return confirm('Delete bill <%= bill.invoice_no %> with its readings, photos and PDF? This cannot be undone.')">
+      <button class="link danger">Delete this bill</button>
+    </form>
+  </div>
 </div>
 <% } %>
 <%- include('partials/foot') %>

@@ -1,0 +1,48 @@
+<%- include('partials/head', { title: 'Admin' }) %>
+<p><a href="/">← Payments</a></p>
+<h1>Admin</h1>
+
+<h2>People</h2>
+<p class="muted small">WhatsApp numbers with country code, digits only is fine (e.g. 34612345678). Emails are the ones allowed to log in. Leave out the neighbor if you relay their meter photo yourself.</p>
+<div class="table-wrap">
+<table class="breakdown">
+  <thead><tr><th>Role</th><th>Name</th><th>WhatsApp</th><th>Email</th><th></th></tr></thead>
+  <tbody>
+  <% for (const p of people) { %>
+    <tr>
+      <td><strong><%= ROLE_LABELS[p.role] %></strong><% if (p.missing) { %><br><small class="muted">not set</small><% } %>
+        <form id="person-<%= p.role %>" method="post" action="/admin/people"><input type="hidden" name="role" value="<%= p.role %>"></form></td>
+      <td><input form="person-<%= p.role %>" name="name" value="<%= p.name || '' %>" placeholder="Name" required></td>
+      <td><input form="person-<%= p.role %>" name="wa_phone" value="<%= p.wa_phone || '' %>" inputmode="tel" placeholder="34612345678"></td>
+      <td><input form="person-<%= p.role %>" name="email" type="email" value="<%= p.email || '' %>" placeholder="name@example.com"></td>
+      <td class="actions"><button form="person-<%= p.role %>"><%= p.missing ? 'Add' : 'Save' %></button></td>
+    </tr>
+    <% if (!p.missing && p.role !== 'yann') { %>
+    <tr class="sub"><td colspan="5">
+      <form method="post" action="/admin/people/<%= p.role %>/delete" onsubmit="return confirm('Remove <%= ROLE_LABELS[p.role] %>? They will stop receiving WhatsApp messages and can no longer log in.')">
+        <button class="link danger">Remove <%= ROLE_LABELS[p.role] %></button>
+      </form>
+    </td></tr>
+    <% } %>
+  <% } %>
+  </tbody>
+</table>
+</div>
+
+<h2>Previous meter reading</h2>
+<div class="box">
+  <p>The neighbor's meter reading before the first bill in the app (the starting point for the first split).
+    Current value: <strong><%= seed ? seed.reading_kwh : 'not set' %></strong><% if (seed) { %> <span class="muted small">(set <%= seed.created_at %> UTC)</span><% } %></p>
+  <form method="post" action="/admin/seed" class="row">
+    <label style="flex:1">New value <input name="reading" inputmode="decimal" required placeholder="e.g. 12345"></label>
+    <button>Save</button>
+  </form>
+  <p class="muted small">Bills not sent yet that start from this reading are recalculated automatically. Bills already sent are left alone: fix their reading on the bill page.</p>
+</div>
+
+<h2>Backup</h2>
+<div class="box">
+  <p>Download a copy of the whole database (bills, readings, splits, people). Photos and PDFs are not included.</p>
+  <a class="button secondary" href="/admin/backup">⬇ Download backup</a>
+</div>
+<%- include('partials/foot') %>

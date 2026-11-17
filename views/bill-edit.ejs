@@ -1,0 +1,54 @@
+<%- include('partials/head', { title: 'Edit ' + bill.invoice_no }) %>
+<p><a href="/bills/<%= bill.id %>">← Back to the bill</a></p>
+<h1>Edit bill <%= bill.invoice_no %></h1>
+<p class="muted">Amounts as on the Endesa bill. Saving recalculates the split<%= split ? ' (the bill then needs to be sent again)' : '' %>. The lines must add up to the total.</p>
+
+<form method="post" action="/bills/<%= bill.id %>/edit" class="box" id="edit-form">
+  <div class="grid">
+    <label>Invoice no. <input name="invoice_no" value="<%= bill.invoice_no %>" required></label>
+    <label>Issued <input type="date" name="issued_at" value="<%= bill.issued_at || '' %>"></label>
+    <label>From <input type="date" name="period_from" value="<%= bill.period_from || '' %>" required></label>
+    <label>To <input type="date" name="period_to" value="<%= bill.period_to || '' %>" required></label>
+    <label>Days <input name="days" value="<%= bill.days || '' %>" inputmode="numeric"></label>
+    <label>Total consumption (kWh) <input name="kwh_total" value="<%= bill.kwh_total %>" inputmode="decimal" required></label>
+    <label>Bill total (€) <input name="total" id="total" value="<%= (bill.total_cents / 100).toFixed(2) %>" inputmode="decimal" required></label>
+  </div>
+
+  <h3>Lines</h3>
+  <div class="table-wrap">
+  <table class="breakdown">
+    <thead><tr><th>Bill line</th><th>Split</th><th class="num">Amount (€)</th></tr></thead>
+    <tbody>
+    <% const rows = [...bill.items, { label: '', kind: 'fixed', amountCents: null, key: 'other' }, { label: '', kind: 'fixed', amountCents: null, key: 'other' }]; %>
+    <% for (const it of rows) { %>
+      <tr>
+        <td><input name="line_label" value="<%= it.label %>" placeholder="(empty rows are ignored)"><input type="hidden" name="line_key" value="<%= it.key || 'other' %>"></td>
+        <td><select name="line_kind">
+          <% for (const k of ['fixed', 'variable', 'tax']) { %><option value="<%= k %>" <%= it.kind === k ? 'selected' : '' %>><%= KIND_LABELS[k] %></option><% } %>
+        </select></td>
+        <td class="num"><input name="line_amount" class="amount" value="<%= it.amountCents == null ? '' : (it.amountCents / 100).toFixed(2) %>" inputmode="decimal"></td>
+      </tr>
+    <% } %>
+    </tbody>
+  </table>
+  </div>
+  <p id="sum-check" class="small"></p>
+  <p class="muted small">To remove a line, clear its label and amount.</p>
+  <button>Save and recalculate</button>
+</form>
+
+<script type="module">
+  import { parseAmount, formatEur } from '/js/money.js';
+  const form = document.getElementById('edit-form');
+  const check = () => {
+    const sum = [...form.querySelectorAll('.amount')].reduce((s, i) => s + (i.value.trim() ? parseAmount(i.value) : 0), 0);
+    const total = parseAmount(document.getElementById('total').value);
+    const ok = Number.isFinite(sum) && Math.abs(sum - total) <= 1;
+    const el = document.getElementById('sum-check');
+    el.textContent = `Sum of lines: ${Number.isFinite(sum) ? formatEur(sum) : '?'} ${ok ? '✓ matches the total' : '✗ does not match the total'}`;
+    el.className = 'small ' + (ok ? 'ok' : 'error');
+  };
+  form.addEventListener('input', check);
+  check();
+</script>
+<%- include('partials/foot') %>

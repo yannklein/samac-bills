@@ -12,6 +12,7 @@ import { formatEur, parseAmount, parseDecimal } from './money.js';
 import { parseReading } from './parseReading.js';
 import { makeWhatsApp } from './whatsapp.js';
 import { makeInbound } from './inbound.js';
+import { makeAdmin, ROLES, ROLE_LABELS } from './admin.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -64,6 +65,7 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
   const auth = makeAuth(config);
   const wa = makeWhatsApp({ phoneNumberId: config.waPhoneNumberId, graphVersion: config.graphVersion, lang: config.waTemplateLang });
   const inbound = makeInbound({ svc, wa, publicUrl: config.publicUrl, endesaNie: config.endesaNie, fetchImpl });
+  const admin = makeAdmin({ db, svc, dataDir: config.dataDir });
   const app = express();
 
   app.set('view engine', 'ejs');
@@ -72,6 +74,7 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
   app.locals.formatEur = formatEur;
   app.locals.STATUS_LABELS = STATUS_LABELS;
   app.locals.KIND_LABELS = KIND_LABELS;
+  app.locals.ROLE_LABELS = ROLE_LABELS;
   app.locals.fmtDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
   app.locals.fmtKwh = (n) => (n == null ? '—' : `${Math.round(n * 1000) / 1000} kWh`);
 
@@ -252,6 +255,69 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
     res.redirect(req.get('referer')?.includes('/bills/') ? `/bills/${req.params.id}` : '/');
   });
 
+  // ---------- Admin (Yann only) ----------
+  const back = (res, url, msg) => res.redirect(`${url}${url.includes('?') ? '&' : '?'}msg=${encodeURIComponent(msg)}`);
+  const list = (v) => (v === undefined ? [] : [].concat(v));
+
+  web.get('/admin', auth.admin, (req, res) => {
+    res.render('admin', { people: admin.listPeople(), seed: admin.currentSeed(), ROLES, msg: req.query.msg });
+  });
+
+  web.post('/admin/people', auth.admin, (req, res) => {
+    admin.savePerson(req.body);
+    back(res, '/admin', `${ROLE_LABELS[req.body.role] ?? req.body.role} saved.`);
+  });
+
+  web.post('/admin/people/:role/delete', auth.admin, (req, res) => {
+    admin.deletePerson(req.params.role);
+    back(res, '/admin', `${ROLE_LABELS[req.params.role] ?? req.params.role} removed.`);
+  });
+
+  web.post('/admin/seed', auth.admin, (req, res) => {
+    const { recalculated, skippedSent } = admin.setSeed(readingNum(req.body.reading));
+    const parts = ['Previous meter reading saved.'];
+    if (recalculated.length) parts.push(`Recalculated: ${recalculated.join(', ')} (send them again).`);
+    if (skippedSent.length) parts.push(`Not changed because already sent: ${skippedSent.join(', ')} (fix their reading on the bill page if needed).`);
+    back(res, '/admin', parts.join(' '));
+  });
+
+  web.get('/admin/backup', auth.admin, (req, res) => {
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    res.attachment(`samac-bills-${stamp}.db`).type('application/vnd.sqlite3').send(admin.backup());
+  });
+
+  web.get('/bills/:id/edit', auth.admin, (req, res) => {
+    res.render('bill-edit', { ...svc.billDetail(Number(req.params.id)), msg: req.query.msg });
+  });
+
+  web.post('/bills/:id/edit', auth.admin, (req, res) => {
+    const id = Number(req.params.id);
+    const b = req.body;
+    const labels = list(b.line_label);
+    const kinds = list(b.line_kind);
+    const amounts = list(b.line_amount);
+    const keys = list(b.line_key);
+    const items = labels
+      .map((label, i) => ({ key: keys[i] || 'other', label: String(label).trim(), kind: kinds[i], raw: String(amounts[i] ?? '').trim() }))
+      .filter((it) => it.label || it.raw) // blank rows are ignored
+      .map(({ raw, ...it }) => ({ ...it, amountCents: parseAmount(raw) }));
+    const { recalculated } = admin.updateBill(id, {
+      invoice_no: b.invoice_no, period_from: b.period_from, period_to: b.period_to, days: Number(b.days) || null,
+      issued_at: b.issued_at, total_cents: parseAmount(b.total), kwh_total: num(b.kwh_total), items,
+    });
+    back(res, `/bills/${id}`, recalculated ? 'Bill saved and split recalculated: send it again if needed.' : 'Bill saved.');
+  });
+
+  web.post('/bills/:id/delete', auth.admin, (req, res) => {
+    const invoice = admin.deleteBill(Number(req.params.id));
+    back(res, '/', `Bill ${invoice} deleted.`);
+  });
+
+  web.post('/bills/:id/mark-sent', auth.admin, (req, res) => {
+    svc.markSent(Number(req.params.id));
+    back(res, `/bills/${req.params.id}`, 'Marked as sent.');
+  });
+
   app.use(express.static(path.join(here, '..', 'public'), { index: false }));
   app.use(web);
 
@@ -265,5 +331,5 @@ export function createApp(config, { fetchImpl = fetch } = {}) {
     res.status(status).render('error', { status, message: err.message });
   });
 
-  return { app, db, svc };
+  return { app, db, svc, admin };
 }
